@@ -232,6 +232,21 @@ function parseAmountAndDate(body) {
   return { signedCents, date };
 }
 
+// addTransactions accetta "payee_name" e crea/abbina il beneficiario da solo,
+// ma updateTransaction no: vuole l'id del beneficiario già risolto (il campo
+// "payee_name" non esiste sullo schema della tabella transactions e fa
+// fallire l'update). Qui replichiamo a mano la stessa logica di
+// find-or-create per poterlo usare anche in modifica.
+async function resolvePayeeIdByName(name) {
+  const trimmed = name.trim();
+  const payees = await api.getPayees();
+  const existing = payees.find(
+    (p) => !p.transfer_acct && p.name && p.name.toLowerCase() === trimmed.toLowerCase(),
+  );
+  if (existing) return existing.id;
+  return api.createPayee({ name: trimmed });
+}
+
 // --- Inserimento transazione --------------------------------------------
 
 app.post('/api/transaction', requireAuth, requireBudgetReady, async (req, res) => {
@@ -325,10 +340,12 @@ app.patch('/api/transactions/:id', requireAuth, requireBudgetReady, async (req, 
     notes: notes || null,
     category: categoryId || null,
   };
-  if (payeeName && payeeName.trim()) fields.payee_name = payeeName.trim();
   if (accountId) fields.account = accountId;
 
   try {
+    if (payeeName && payeeName.trim()) {
+      fields.payee = await resolvePayeeIdByName(payeeName);
+    }
     await api.updateTransaction(id, fields);
     await api.sync();
     res.json({ ok: true });
