@@ -892,8 +892,21 @@
   });
 
   if ('serviceWorker' in navigator) {
+    // Quando una nuova versione dell'app viene pubblicata, il service worker
+    // aggiornato prende il controllo della pagina in background (skipWaiting +
+    // clients.claim, vedi sw.js); qui ricarichiamo automaticamente UNA VOLTA
+    // in quel momento, così l'app mostra sempre l'ultima versione senza dover
+    // mai cancellare a mano i dati del sito.
+    var reloadedForUpdate = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (reloadedForUpdate) return;
+      reloadedForUpdate = true;
+      window.location.reload();
+    });
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('/sw.js').catch(function () {});
+      navigator.serviceWorker.register('/sw.js').then(function (reg) {
+        reg.update().catch(function () {});
+      }).catch(function () {});
     });
   }
 

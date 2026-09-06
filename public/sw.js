@@ -6,7 +6,7 @@
 // cache-first per un avvio più veloce. Le chiamate /api/* non vengono mai
 // messe in cache: passano sempre alla rete, altrimenti login/dati/salvataggi
 // diventerebbero stantii.
-const CACHE = 'actualcel-shell-v2';
+const CACHE = 'actualcel-shell-v3';
 const SHELL = ['/', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
