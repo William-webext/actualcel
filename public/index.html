@@ -781,14 +781,16 @@
   }
 
   function closeEdit() {
-    // Se la scheda è stata aperta con un push di history (caso normale),
-    // usa il tasto Indietro "virtuale" così lo stato resta coerente col
-    // tasto Indietro fisico di Android — evita che serva un secondo tap
-    // per uscire davvero dopo aver chiuso la scheda con la X.
+    // La chiusura vera e propria è sempre immediata e non dipende dalla
+    // history API: salvataggio/eliminazione devono chiudere la scheda
+    // comunque, anche se history.back() si comportasse in modo strano in
+    // qualche browser/PWA. Il pop dello stato "modal" è solo un'aggiunta
+    // per tenere pulito lo stack del tasto Indietro fisico — se fallisse,
+    // nella peggiore delle ipotesi serve un tap in più su Indietro più
+    // avanti, ma l'azione dell'utente (salvare/eliminare) non ne risente.
+    actualCloseEdit();
     if (history.state && history.state.modal) {
       history.back();
-    } else {
-      actualCloseEdit();
     }
   }
 
