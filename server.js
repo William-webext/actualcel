@@ -10,7 +10,7 @@
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
-const session = require('express-session');
+const cookieSession = require('cookie-session');
 const rateLimit = require('express-rate-limit');
 const api = require('@actual-app/api');
 
@@ -44,30 +44,50 @@ if (missing.length) {
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
-// @actual-app/api può generare eccezioni asincrone fuori dal try/catch di
-// connectWithRetry (es. durante operazioni interne sul file di cache). In un
-// container la cosa giusta da fare è loggare chiaramente ed uscire, così
-// "restart: unless-stopped" lo fa ripartire pulito invece di restare in uno
-// stato inconsistente.
-process.on('uncaughtException', (err) => {
-  console.error('[actualcel] Eccezione non gestita, esco per farmi riavviare da Docker:', err);
-  process.exit(1);
-});
-process.on('unhandledRejection', (err) => {
-  console.error('[actualcel] Rejection non gestita, esco per farmi riavviare da Docker:', err);
-  process.exit(1);
-});
-
 let budgetReady = false;
 let lastSyncError = null;
+let recovering = false;
 
-// NOTA: @actual-app/api può generare un secondo rifiuto di promise "fuori banda"
-// (oltre a quello del normale await) quando il server non è raggiungibile. Anziché
-// inseguirlo con un retry-loop interno che verrebbe comunque scavalcato da quel
-// rifiuto fuori banda, la strategia semplice e robusta è: un solo tentativo,
-// log chiaro, e se fallisce si esce — è compose/Portainer con
-// "restart: unless-stopped" a far ripartire il container con backoff finché
-// actual_server non è pronto (capita tipicamente solo al boot dello stack).
+// NOTA: @actual-app/api può generare un rifiuto di promise "fuori banda"
+// (fuori dal try/catch della singola richiesta) sia durante la connessione
+// iniziale sia, più raramente, durante operazioni successive (sync, modifica,
+// cancellazione) — es. quando actual_server si è aggiornato nel frattempo.
+// Se succede PRIMA che il budget sia mai stato caricato, non c'è nulla da
+// salvare: usciamo e lasciamo che "restart: unless-stopped" riprovi pulito.
+// Se succede DOPO (a runtime, con utenti già loggati), proviamo prima a
+// riconnetterci nello stesso processo: così il server resta in piedi e le
+// sessioni attive non vengono perse (con express-session in memoria un
+// riavvio forzava tutti a reinserire il PIN). Solo se anche il tentativo di
+// riconnessione fallisce usciamo, come rete di sicurezza finale.
+async function handleFatalError(err) {
+  console.error('[actualcel] Errore non gestito:', err);
+  lastSyncError = (err && err.message) || String(err);
+
+  if (!budgetReady) {
+    console.error('[actualcel] Mai arrivato a caricare il budget: esco per farmi riavviare da Docker.');
+    process.exit(1);
+    return;
+  }
+
+  if (recovering) return;
+  recovering = true;
+  budgetReady = false;
+  console.error('[actualcel] Provo a riconnettermi senza riavviare il container…');
+  try {
+    await api.shutdown().catch(() => {});
+    await connectOnce();
+    console.log('[actualcel] Riconnessione riuscita, sessioni utente preservate.');
+  } catch (e) {
+    console.error('[actualcel] Riconnessione fallita, esco per farmi riavviare da Docker:', e.message || e);
+    process.exit(1);
+  } finally {
+    recovering = false;
+  }
+}
+
+process.on('uncaughtException', handleFatalError);
+process.on('unhandledRejection', handleFatalError);
+
 async function connectOnce() {
   console.log('[actualcel] Connessione al server Actual…');
   await api.init({
@@ -104,19 +124,15 @@ const app = express();
 app.set('trust proxy', 1); // dietro Cloudflare Tunnel / reverse proxy
 app.use(express.json());
 app.use(
-  session({
+  cookieSession({
     name: 'actualcel.sid',
     secret: SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      sameSite: 'lax',
-      // true per default: il tunnel Cloudflare parla HTTPS col client. Metti
-      // COOKIE_SECURE=false solo se accedi in HTTP semplice (es. solo LAN, test locale).
-      secure: COOKIE_SECURE !== 'false',
-      maxAge: 1000 * 60 * 60 * 24 * 30, // 30 giorni, evita di re-inserire il PIN ogni volta da mobile
-    },
+    httpOnly: true,
+    sameSite: 'lax',
+    // true per default: il tunnel Cloudflare parla HTTPS col client. Metti
+    // COOKIE_SECURE=false solo se accedi in HTTP semplice (es. solo LAN, test locale).
+    secure: COOKIE_SECURE !== 'false',
+    maxAge: 1000 * 60 * 60 * 24 * 30, // 30 giorni, evita di re-inserire il PIN ogni volta da mobile
   }),
 );
 
@@ -138,7 +154,8 @@ app.post('/api/login', loginLimiter, (req, res) => {
 });
 
 app.post('/api/logout', (req, res) => {
-  req.session.destroy(() => res.json({ ok: true }));
+  req.session = null;
+  res.json({ ok: true });
 });
 
 app.get('/api/session', (req, res) => {
@@ -341,11 +358,7 @@ const server = app.listen(Number(PORT), () => {
   console.log(`[actualcel] In ascolto sulla porta ${PORT}`);
 });
 
-connectOnce().catch((err) => {
-  console.error('[actualcel] Connessione iniziale fallita:', err.message || err);
-  lastSyncError = err.message || String(err);
-  process.exit(1);
-});
+connectOnce().catch(handleFatalError);
 
 // Ri-sincronizza periodicamente per tenere aggiornate categorie/beneficiari
 // creati da altri client (desktop/altro telefono).
