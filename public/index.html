@@ -166,6 +166,21 @@
   .dangerBtn.confirming { background: var(--expense); color: white; }
   .primaryBtn { background: var(--accent); color: white; }
 
+  /* Indicatore di caricamento sui pulsanti (salva/elimina): il testo resta
+     nel DOM ma diventa trasparente, e uno spinner centrato lo sovrasta, così
+     il pulsante non cambia dimensione e l'utente vede subito che sta
+     elaborando invece di pensare che l'app sia bloccata. */
+  button.loading { position: relative; color: transparent !important; pointer-events: none; }
+  .spinner {
+    position: absolute; top: 50%; left: 50%; width: 20px; height: 20px;
+    margin: -10px 0 0 -10px; border-radius: 50%;
+    border: 2.5px solid rgba(255,255,255,0.35); border-top-color: #fff;
+    animation: spin 0.7s linear infinite;
+  }
+  #saveBtn.loading .spinner, #editSaveBtn.loading .spinner { border-color: rgba(255,255,255,0.35); border-top-color: #fff; }
+  #editDeleteBtn.loading .spinner { border-color: rgba(255,91,106,0.35); border-top-color: var(--expense); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
   #toast {
     position: fixed; top: 14px; left: 50%; transform: translateX(-50%) translateY(-20px);
     max-width: calc(100vw - 32px); box-sizing: border-box; word-break: break-word; text-align: center;
@@ -368,6 +383,23 @@
   var editNotes = document.getElementById('editNotes');
   var editSaveBtn = document.getElementById('editSaveBtn');
   var editDeleteBtn = document.getElementById('editDeleteBtn');
+
+  function setButtonLoading(btn, loading) {
+    if (loading) {
+      btn.disabled = true;
+      btn.classList.add('loading');
+      if (!btn.querySelector('.spinner')) {
+        var sp = document.createElement('span');
+        sp.className = 'spinner';
+        btn.appendChild(sp);
+      }
+    } else {
+      btn.disabled = false;
+      btn.classList.remove('loading');
+      var existing = btn.querySelector('.spinner');
+      if (existing) existing.remove();
+    }
+  }
 
   function showToast(msg, isError) {
     toast.textContent = msg;
@@ -592,7 +624,7 @@
       showToast('Seleziona un conto', true);
       return;
     }
-    saveBtn.disabled = true;
+    setButtonLoading(saveBtn, true);
     fetch('/api/transaction', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -615,7 +647,7 @@
     }).catch(function () {
       showToast('Salvataggio fallito, riprova', true);
     }).finally(function () {
-      saveBtn.disabled = false;
+      setButtonLoading(saveBtn, false);
     });
   });
 
@@ -834,7 +866,7 @@
       showToast('Seleziona un conto', true);
       return;
     }
-    editSaveBtn.disabled = true;
+    setButtonLoading(editSaveBtn, true);
     fetch('/api/transactions/' + encodeURIComponent(state.editingId), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -857,7 +889,7 @@
     }).catch(function () {
       showToast('Modifica fallita, riprova', true);
     }).finally(function () {
-      editSaveBtn.disabled = false;
+      setButtonLoading(editSaveBtn, false);
     });
   });
 
@@ -873,7 +905,7 @@
 
     clearTimeout(state.deleteConfirmTimeout);
     var idToDelete = state.editingId;
-    editDeleteBtn.disabled = true;
+    setButtonLoading(editDeleteBtn, true);
     fetch('/api/transactions/' + encodeURIComponent(idToDelete), { method: 'DELETE' })
       .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
       .then(function (res) {
@@ -887,7 +919,7 @@
         resetDeleteConfirm();
       })
       .finally(function () {
-        editDeleteBtn.disabled = false;
+        setButtonLoading(editDeleteBtn, false);
       });
   });
 
