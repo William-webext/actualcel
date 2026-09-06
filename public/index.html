@@ -165,6 +165,7 @@
   .dangerBtn { background: var(--surface-2); color: var(--expense); border: 1px solid var(--expense) !important; }
   .dangerBtn.confirming { background: var(--expense); color: white; }
   .primaryBtn { background: var(--accent); color: white; }
+  .secondaryBtn { background: var(--surface-2); color: var(--text); border: 1px solid var(--border) !important; }
 
   /* Indicatore di caricamento sui pulsanti (salva/elimina): il testo resta
      nel DOM ma diventa trasparente, e uno spinner centrato lo sovrasta, così
@@ -320,6 +321,16 @@
   </div>
 </div>
 
+<div id="exitOverlay" class="overlay hidden" style="z-index: 40;">
+  <div class="editSheet">
+    <div class="editHeader"><span>Uscire da ActualCel?</span></div>
+    <div class="editActions">
+      <button type="button" id="exitCancelBtn" class="secondaryBtn">Annulla</button>
+      <button type="button" id="exitConfirmBtn" class="dangerBtn">Esci</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -381,6 +392,9 @@
   var editNotes = document.getElementById('editNotes');
   var editSaveBtn = document.getElementById('editSaveBtn');
   var editDeleteBtn = document.getElementById('editDeleteBtn');
+  var exitOverlay = document.getElementById('exitOverlay');
+  var exitCancelBtn = document.getElementById('exitCancelBtn');
+  var exitConfirmBtn = document.getElementById('exitConfirmBtn');
 
   function setButtonLoading(btn, loading) {
     if (loading) {
@@ -550,7 +564,15 @@
         appScreen.classList.remove('hidden');
         dateInput.value = todayLocalISO();
         loadMeta();
-        history.replaceState({ view: 'new' }, '');
+        // Due stati invece di uno: "navRoot" resta in fondo alla pila come
+        // sentinella, e sopra teniamo sempre uno stato "cuscinetto" con lo
+        // stesso contenuto (tab Nuovo). Finché l'utente preme Indietro senza
+        // essere arrivato al fondo, va sempre a finire sul cuscinetto — solo
+        // consumando anche quello si arriva a navRoot, il segnale che un
+        // altro Indietro uscirebbe davvero dall'app: lì mostriamo la
+        // conferma invece di lasciarlo succedere in silenzio.
+        history.replaceState({ view: 'new', navRoot: true }, '');
+        history.pushState({ view: 'new' }, '');
       } else {
         loginScreen.classList.remove('hidden');
         appScreen.classList.add('hidden');
@@ -689,8 +711,28 @@
 
   window.addEventListener('popstate', function (e) {
     var s = e.state || { view: 'new' };
+    if (s.navRoot) {
+      // Cuscinetto consumato: un altro Indietro uscirebbe davvero dall'app.
+      // Non lo lasciamo succedere senza chiedere.
+      showExitConfirm();
+      return;
+    }
     if (!s.modal) actualCloseEdit();
     applyTab(s.view === 'history' ? 'history' : 'new');
+  });
+
+  function showExitConfirm() {
+    exitOverlay.classList.remove('hidden');
+  }
+
+  exitCancelBtn.addEventListener('click', function () {
+    exitOverlay.classList.add('hidden');
+    history.pushState({ view: 'new' }, ''); // ri-arma il cuscinetto
+  });
+
+  exitConfirmBtn.addEventListener('click', function () {
+    exitOverlay.classList.add('hidden');
+    history.back(); // siamo su navRoot: un altro back esce davvero dall'app
   });
 
   // --- Storico ---------------------------------------------------------
@@ -939,6 +981,19 @@
       }).catch(function () {});
     });
   }
+
+  // Se cambi pagina/scheda e poi torni indietro col browser, spesso non è
+  // una nuova visita: il browser ripristina la pagina "congelata" così com'era
+  // (bfcache), senza rieseguire nulla — per questo i dati (es. una
+  // transazione appena aggiunta) restano quelli di prima finché non fai un
+  // aggiornamento vero (F5). "pageshow" con persisted=true è il segnale che
+  // questo è successo: aggiorniamo meta/storico senza toccare il form.
+  window.addEventListener('pageshow', function (e) {
+    if (!e.persisted) return;
+    if (loginScreen.classList.contains('hidden')) return; // non ancora loggato
+    loadMeta();
+    if (!historyScreen.classList.contains('hidden')) loadHistory();
+  });
 
   checkSession();
 })();
