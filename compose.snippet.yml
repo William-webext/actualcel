@@ -1,0 +1,20 @@
+# Aggiungi questo servizio allo stack Portainer/compose dove gira già
+# actual_server, così condividono la stessa rete Docker e puoi usare
+# ACTUAL_SERVER_URL=http://actual_server:5006 senza passare da IP/porta host.
+
+  actualcel:
+    container_name: actualcel
+    image: actualcel:latest   # build locale, vedi README
+    build: /volume1/docker/actualcel   # percorso assoluto: nello stack Portainer
+                                        # "." punterebbe alla cartella interna
+                                        # di Portainer, non a questa
+    restart: unless-stopped
+    env_file:
+      - /volume1/docker/actualcel/.env
+    volumes:
+      - /volume1/docker/actualcel:/data:rw
+    ports:
+      - "8730:8730"   # esponi solo se ti serve raggiungerlo anche senza tunnel;
+                       # altrimenti puoi anche omettere e usare solo la rete Docker + Cloudflare Tunnel
+    # Nessuna dipendenza "depends_on" stretta: il servizio riprova la connessione
+    # da solo con backoff finché actual_server non è pronto.
