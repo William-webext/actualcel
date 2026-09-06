@@ -26,10 +26,12 @@
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
-    margin: 0; padding: 0; height: 100%;
+    margin: 0; padding: 0; height: 100%; max-width: 100vw;
+    overflow-x: hidden;
     background: var(--bg); color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }
+  body.modalOpen { position: fixed; left: 0; right: 0; width: 100%; }
   button, input, select { font-family: inherit; }
 
   .screen { min-height: 100dvh; display: flex; flex-direction: column; }
@@ -156,13 +158,17 @@
   .editHeader span { font-size: 1.1rem; font-weight: 700; }
   .editHeader button { background: var(--surface); border: 1px solid var(--border); color: var(--text); width: 36px; height: 36px; border-radius: 50%; font-size: 1rem; }
   .editActions { display: flex; gap: 10px; }
-  .editActions button { flex: 1; padding: 16px; border-radius: var(--radius); border: none; font-size: 1.05rem; font-weight: 700; }
+  .editActions button {
+    flex: 1; min-height: 52px; padding: 10px; border-radius: var(--radius); border: none;
+    font-size: 1.05rem; font-weight: 700; line-height: 1.2;
+  }
   .dangerBtn { background: var(--surface-2); color: var(--expense); border: 1px solid var(--expense) !important; }
   .dangerBtn.confirming { background: var(--expense); color: white; }
   .primaryBtn { background: var(--accent); color: white; }
 
   #toast {
     position: fixed; top: 14px; left: 50%; transform: translateX(-50%) translateY(-20px);
+    max-width: calc(100vw - 32px); box-sizing: border-box; word-break: break-word; text-align: center;
     background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
     padding: 12px 20px; border-radius: 999px; font-size: 0.95rem;
     opacity: 0; transition: all 0.25s ease; pointer-events: none; z-index: 50;
@@ -759,8 +765,24 @@
     editDeleteBtn.textContent = 'Elimina';
   }
 
+  var savedScrollY = 0;
+
+  function lockBodyScroll() {
+    savedScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    document.body.style.top = '-' + savedScrollY + 'px';
+    document.body.classList.add('modalOpen');
+  }
+
+  function unlockBodyScroll() {
+    if (!document.body.classList.contains('modalOpen')) return;
+    document.body.classList.remove('modalOpen');
+    document.body.style.top = '';
+    window.scrollTo(0, savedScrollY);
+  }
+
   function openEdit(t) {
     resetDeleteConfirm();
+    lockBodyScroll();
     state.editingId = t.id;
     var type = t.amount < 0 ? 'expense' : 'income';
     setEditType(type);
@@ -778,6 +800,7 @@
     editOverlay.classList.add('hidden');
     state.editingId = null;
     resetDeleteConfirm();
+    unlockBodyScroll();
   }
 
   function closeEdit() {
@@ -843,7 +866,7 @@
 
     if (!editDeleteBtn.classList.contains('confirming')) {
       editDeleteBtn.classList.add('confirming');
-      editDeleteBtn.textContent = 'Tocca di nuovo per confermare';
+      editDeleteBtn.textContent = 'Confermi?';
       state.deleteConfirmTimeout = setTimeout(resetDeleteConfirm, 4000);
       return;
     }
