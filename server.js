@@ -444,11 +444,21 @@ app.get('/api/transactions', requireAuth, requireBudgetReady, async (req, res) =
             isTransfer: !!t.transfer_id,
             accountId: acc.id,
             accountName: acc.name,
+            // sort_order è il campo interno di Actual usato per l'ordine "vero" a
+            // parità di data (di default è il timestamp di creazione della riga).
+            // Con un solo conto la query di api.getTransactions() lo applica già
+            // come criterio secondario, ma quando uniamo più conti (vista "Tutti i
+            // conti") dobbiamo riapplicarlo noi qui sotto, altrimenti l'ordinamento
+            // a parità di data resta quello di concatenazione per conto.
+            sortOrder: typeof t.sort_order === 'number' ? t.sort_order : 0,
           }));
       }),
     );
 
-    const list = perAccount.flat().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+    const list = perAccount.flat().sort((a, b) => {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      return b.sortOrder - a.sortOrder;
+    });
     res.json({ transactions: list });
   } catch (err) {
     console.error('[actualcel] Errore /api/transactions:', err);
