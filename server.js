@@ -13,6 +13,7 @@ const express = require('express');
 const cookieSession = require('cookie-session');
 const rateLimit = require('express-rate-limit');
 const api = require('@actual-app/api');
+const Database = require('better-sqlite3');
 
 const {
   ACTUAL_SERVER_URL,
@@ -104,6 +105,45 @@ async function connectOnce() {
   budgetReady = true;
   lastSyncError = null;
   console.log('[actualcel] Budget caricato correttamente.');
+  logBudgetStats();
+}
+
+// Diagnostica di sola lettura: quante righe ha davvero il replica locale del
+// budget (db.sqlite dentro DATA_DIR). Serve a capire se la lentezza di
+// sync/modifica dipende dal numero di transazioni "vive" oppure da altro
+// (mesi di storico del foglio di calcolo, registro CRDT accumulato nel
+// tempo…) invece di continuare a indovinare. Non modifica nulla.
+function logBudgetStats() {
+  try {
+    const entries = fs.readdirSync(DATA_DIR, { withFileTypes: true });
+    const budgetDirEntry = entries.find(
+      (e) => e.isDirectory() && fs.existsSync(path.join(DATA_DIR, e.name, 'db.sqlite')),
+    );
+    if (!budgetDirEntry) {
+      console.warn('[actualcel] Statistiche db: nessuna cartella budget trovata sotto', DATA_DIR);
+      return;
+    }
+    const dbPath = path.join(DATA_DIR, budgetDirEntry.name, 'db.sqlite');
+    const db = new Database(dbPath, { readonly: true });
+    const count = (table) => {
+      try {
+        return db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n;
+      } catch (e) {
+        return 'n/d (' + e.message + ')';
+      }
+    };
+    console.log('[actualcel] Statistiche budget locale (' + budgetDirEntry.name + '):', {
+      transactions: count('transactions'),
+      categories: count('categories'),
+      category_groups: count('category_groups'),
+      zero_budget_months: count('zero_budget_months'),
+      spreadsheet_cells: count('spreadsheet_cells'),
+      messages_crdt: count('messages_crdt'),
+    });
+    db.close();
+  } catch (e) {
+    console.warn('[actualcel] Impossibile leggere le statistiche del db locale:', e.message);
+  }
 }
 
 // api.sync() è sempre una richiesta di rete verso actual_server: a volte è

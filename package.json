@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@actual-app/api": "^26.9.0",
+    "better-sqlite3": "^12.11.1",
     "cookie-session": "^2.1.1",
     "express": "^4.19.2",
     "express-rate-limit": "^7.4.0"
