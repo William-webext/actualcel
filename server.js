@@ -200,28 +200,36 @@ app.get('/api/meta', requireAuth, requireBudgetReady, async (req, res) => {
   }
 });
 
+// --- Validazione condivisa importo/data ---------------------------------
+
+function parseAmountAndDate(body) {
+  const { type, amount, date } = body || {};
+  const numericAmount = Number(amount);
+  if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+    return { error: 'invalid_amount' };
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) {
+    return { error: 'invalid_date' };
+  }
+  const signedCents = Math.round(numericAmount * 100) * (type === 'income' ? 1 : -1);
+  return { signedCents, date };
+}
+
 // --- Inserimento transazione --------------------------------------------
 
 app.post('/api/transaction', requireAuth, requireBudgetReady, async (req, res) => {
-  const { accountId, type, amount, payeeName, categoryId, date, notes } = req.body || {};
+  const { accountId, payeeName, categoryId, notes } = req.body || {};
 
-  if (!accountId || !date || amount === undefined || amount === null) {
+  if (!accountId || !req.body || !req.body.date || req.body.amount === undefined || req.body.amount === null) {
     return res.status(400).json({ error: 'missing_fields' });
   }
-  const numericAmount = Number(amount);
-  if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-    return res.status(400).json({ error: 'invalid_amount' });
-  }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return res.status(400).json({ error: 'invalid_date' });
-  }
-
-  const signedCents = Math.round(numericAmount * 100) * (type === 'income' ? 1 : -1);
+  const parsed = parseAmountAndDate(req.body);
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
 
   const tx = {
     account: accountId,
-    date,
-    amount: signedCents,
+    date: parsed.date,
+    amount: parsed.signedCents,
     notes: notes || undefined,
   };
   if (payeeName && payeeName.trim()) tx.payee_name = payeeName.trim();
@@ -234,6 +242,77 @@ app.post('/api/transaction', requireAuth, requireBudgetReady, async (req, res) =
   } catch (err) {
     console.error('[actualcel] Errore /api/transaction:', err);
     res.status(500).json({ error: 'add_failed', detail: err.message });
+  }
+});
+
+// --- Storico transazioni (lettura, modifica, cancellazione) -------------
+
+app.get('/api/transactions', requireAuth, requireBudgetReady, async (req, res) => {
+  const { accountId } = req.query;
+  const days = Math.min(Math.max(Number(req.query.days) || 60, 1), 365);
+  if (!accountId) return res.status(400).json({ error: 'missing_account' });
+
+  const end = new Date();
+  const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);
+  const toISO = (d) => d.toISOString().slice(0, 10);
+
+  try {
+    await api.sync();
+    const transactions = await api.getTransactions(accountId, toISO(start), toISO(end));
+    const list = transactions
+      .filter((t) => !t.is_parent) // le transazioni divise (split) restano fuori dallo storico rapido
+      .map((t) => ({
+        id: t.id,
+        date: t.date,
+        amount: t.amount,
+        payee: t.payee || null,
+        payeeName: t.imported_payee || null,
+        category: t.category || null,
+        notes: t.notes || '',
+        cleared: !!t.cleared,
+        isTransfer: !!t.transfer_id,
+      }))
+      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+    res.json({ transactions: list });
+  } catch (err) {
+    console.error('[actualcel] Errore /api/transactions:', err);
+    res.status(500).json({ error: 'list_failed', detail: err.message });
+  }
+});
+
+app.patch('/api/transactions/:id', requireAuth, requireBudgetReady, async (req, res) => {
+  const { id } = req.params;
+  const { payeeName, categoryId, notes } = req.body || {};
+  const parsed = parseAmountAndDate(req.body);
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
+
+  const fields = {
+    date: parsed.date,
+    amount: parsed.signedCents,
+    notes: notes || null,
+    category: categoryId || null,
+  };
+  if (payeeName && payeeName.trim()) fields.payee_name = payeeName.trim();
+
+  try {
+    await api.updateTransaction(id, fields);
+    await api.sync();
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[actualcel] Errore modifica transazione:', err);
+    res.status(500).json({ error: 'update_failed', detail: err.message });
+  }
+});
+
+app.delete('/api/transactions/:id', requireAuth, requireBudgetReady, async (req, res) => {
+  const { id } = req.params;
+  try {
+    await api.deleteTransaction(id);
+    await api.sync();
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[actualcel] Errore cancellazione transazione:', err);
+    res.status(500).json({ error: 'delete_failed', detail: err.message });
   }
 });
 

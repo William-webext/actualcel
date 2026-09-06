@@ -5,7 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="ActualCel" />
 <meta name="theme-color" content="#12141a" />
+<link rel="manifest" href="/manifest.json" />
+<link rel="apple-touch-icon" href="/icons/icon-192.png" />
+<link rel="icon" href="/icons/icon-192.png" />
 <title>ActualCel</title>
 <style>
   :root {
@@ -20,12 +24,11 @@
     --income: #35d08a;
     --radius: 14px;
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
     margin: 0; padding: 0; height: 100%;
     background: var(--bg); color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    -webkit-tap-highlight-color: transparent;
   }
   button, input, select { font-family: inherit; }
 
@@ -34,80 +37,141 @@
 
   /* --- Login --- */
   #loginScreen { align-items: center; justify-content: center; padding: 24px; gap: 18px; }
-  #loginScreen h1 { font-size: 1.1rem; font-weight: 600; color: var(--text-dim); margin: 0 0 8px; }
+  #loginScreen h1 { font-size: 1.2rem; font-weight: 600; color: var(--text-dim); margin: 0 0 8px; }
   #pinInput {
-    width: 100%; max-width: 280px; text-align: center; letter-spacing: 0.5em;
-    font-size: 1.6rem; padding: 16px; border-radius: var(--radius);
+    width: 100%; max-width: 320px; text-align: center; letter-spacing: 0.5em;
+    font-size: 1.8rem; padding: 18px; border-radius: var(--radius);
     border: 1px solid var(--border); background: var(--surface); color: var(--text);
   }
   #pinInput:focus { outline: 2px solid var(--accent); }
   #unlockBtn {
-    width: 100%; max-width: 280px; padding: 14px; border-radius: var(--radius);
-    border: none; background: var(--accent); color: white; font-size: 1.05rem; font-weight: 600;
+    width: 100%; max-width: 320px; padding: 16px; border-radius: var(--radius);
+    border: none; background: var(--accent); color: white; font-size: 1.1rem; font-weight: 600;
   }
-  #loginError { color: var(--expense); font-size: 0.9rem; min-height: 1.2em; }
+  #loginError { color: var(--expense); font-size: 0.95rem; min-height: 1.2em; text-align: center; }
 
-  /* --- Main --- */
-  #mainScreen { padding: 0 0 96px; }
+  /* --- App shell --- */
+  #appScreen { padding: 0 0 108px; }
   header {
     position: sticky; top: 0; z-index: 5;
     display: flex; align-items: center; justify-content: space-between;
-    padding: 16px 18px; background: rgba(18,20,26,0.9); backdrop-filter: blur(8px);
-    border-bottom: 1px solid var(--border);
+    padding: 18px 18px 12px; background: rgba(18,20,26,0.92); backdrop-filter: blur(8px);
   }
-  header h1 { font-size: 1.05rem; margin: 0; font-weight: 600; }
-  .statusDot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-dim); display: inline-block; margin-right: 8px; }
+  header h1 { font-size: 1.2rem; margin: 0; font-weight: 700; display: flex; align-items: center; }
+  .statusDot { width: 10px; height: 10px; border-radius: 50%; background: var(--text-dim); display: inline-block; margin-right: 10px; flex: none; }
   .statusDot.ok { background: var(--income); }
   .statusDot.err { background: var(--expense); }
-  #logoutBtn { background: none; border: none; color: var(--text-dim); font-size: 0.85rem; padding: 8px; }
+  #logoutBtn { background: none; border: none; color: var(--text-dim); font-size: 0.95rem; padding: 10px; }
 
-  form { padding: 18px; display: flex; flex-direction: column; gap: 18px; max-width: 480px; margin: 0 auto; }
+  #metaError {
+    margin: 0 18px 12px; padding: 12px 14px; border-radius: var(--radius);
+    background: rgba(255,91,106,0.12); border: 1px solid var(--expense); color: var(--expense);
+    font-size: 0.9rem; line-height: 1.4;
+  }
+  #metaError button {
+    display: block; margin-top: 8px; background: var(--expense); color: white; border: none;
+    padding: 8px 14px; border-radius: 10px; font-weight: 600; font-size: 0.85rem;
+  }
 
-  .segmented { display: flex; background: var(--surface); border-radius: var(--radius); padding: 4px; border: 1px solid var(--border); }
+  .wrap { max-width: 520px; margin: 0 auto; padding: 0 18px; }
+
+  .accountBar { padding: 0 18px 14px; }
+  .accountBar .wrap { padding: 0; }
+  #account {
+    width: 100%; padding: 16px; border-radius: var(--radius); border: 1px solid var(--border);
+    background: var(--surface); color: var(--text); font-size: 1.1rem; font-weight: 600;
+  }
+
+  .tabBar { display: flex; gap: 10px; padding: 0 18px 16px; max-width: 520px; margin: 0 auto; }
+  .tabBar button {
+    flex: 1; padding: 13px; border-radius: var(--radius); border: 1px solid var(--border);
+    background: var(--surface); color: var(--text-dim); font-size: 1rem; font-weight: 700;
+  }
+  .tabBar button.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+  form { padding: 0 18px 18px; display: flex; flex-direction: column; gap: 20px; max-width: 520px; margin: 0 auto; }
+
+  .segmented { display: flex; background: var(--surface); border-radius: var(--radius); padding: 5px; border: 1px solid var(--border); }
   .segmented button {
-    flex: 1; padding: 12px; border: none; background: transparent; color: var(--text-dim);
-    border-radius: 10px; font-size: 0.95rem; font-weight: 600;
+    flex: 1; padding: 14px; border: none; background: transparent; color: var(--text-dim);
+    border-radius: 10px; font-size: 1.05rem; font-weight: 700;
   }
   .segmented button.active.expense { background: var(--expense); color: white; }
   .segmented button.active.income { background: var(--income); color: white; }
 
   .amountWrap {
-    display: flex; align-items: baseline; justify-content: center; gap: 6px;
+    display: flex; align-items: baseline; justify-content: center; gap: 8px;
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 18px 12px;
+    padding: 22px 12px;
   }
-  .amountWrap span { font-size: 1.6rem; color: var(--text-dim); }
-  #amount {
-    border: none; background: transparent; color: var(--text); font-size: 2.6rem; font-weight: 700;
+  .amountWrap span { font-size: 1.8rem; color: var(--text-dim); }
+  .amountWrap input {
+    border: none; background: transparent; color: var(--text); font-size: 3rem; font-weight: 800;
     width: 100%; text-align: center;
   }
-  #amount:focus { outline: none; }
+  .amountWrap input:focus { outline: none; }
 
-  label { font-size: 0.8rem; color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 6px; }
+  label { font-size: 0.85rem; color: var(--text-dim); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 8px; }
   .field { display: flex; flex-direction: column; }
   select, input[type="text"], input[type="date"] {
-    width: 100%; padding: 14px; border-radius: var(--radius); border: 1px solid var(--border);
-    background: var(--surface); color: var(--text); font-size: 1rem;
+    width: 100%; padding: 16px; border-radius: var(--radius); border: 1px solid var(--border);
+    background: var(--surface); color: var(--text); font-size: 1.1rem;
   }
   select:focus, input:focus { outline: 2px solid var(--accent); }
 
   .saveBar {
     position: fixed; bottom: 0; left: 0; right: 0;
     padding: 14px 18px calc(14px + env(safe-area-inset-bottom));
-    background: linear-gradient(to top, var(--bg) 60%, transparent);
+    background: linear-gradient(to top, var(--bg) 65%, transparent);
   }
   #saveBtn {
-    width: 100%; max-width: 480px; margin: 0 auto; display: block;
-    padding: 16px; border-radius: var(--radius); border: none;
-    background: var(--accent); color: white; font-size: 1.05rem; font-weight: 700;
+    width: 100%; max-width: 520px; margin: 0 auto; display: block;
+    padding: 18px; border-radius: var(--radius); border: none;
+    background: var(--accent); color: white; font-size: 1.15rem; font-weight: 700;
   }
   #saveBtn:disabled { opacity: 0.6; }
+
+  /* --- History --- */
+  #historyScreen { padding: 0 18px 18px; max-width: 520px; margin: 0 auto; }
+  .historyGroup + .historyGroup { margin-top: 18px; }
+  .historyGroupLabel { color: var(--text-dim); font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 10px 4px; }
+  .txRow {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px; margin-bottom: 10px;
+  }
+  .txRow .txInfo { min-width: 0; }
+  .txRow .txPayee { font-size: 1.05rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .txRow .txCategory { font-size: 0.88rem; color: var(--text-dim); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .txRow .txAmount { font-size: 1.1rem; font-weight: 700; white-space: nowrap; flex: none; }
+  .txAmount.expense { color: var(--expense); }
+  .txAmount.income { color: var(--income); }
+  .txRow.transfer { opacity: 0.65; }
+  #historyEmpty, #historyLoading { color: var(--text-dim); text-align: center; padding: 40px 0; }
+
+  /* --- Edit overlay --- */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 30;
+    display: flex; align-items: flex-end; justify-content: center;
+  }
+  .editSheet {
+    width: 100%; max-width: 520px; background: var(--bg); border-radius: 20px 20px 0 0;
+    padding: 18px 18px calc(18px + env(safe-area-inset-bottom));
+    max-height: 92dvh; overflow-y: auto; display: flex; flex-direction: column; gap: 18px;
+  }
+  .editHeader { display: flex; align-items: center; justify-content: space-between; }
+  .editHeader span { font-size: 1.1rem; font-weight: 700; }
+  .editHeader button { background: var(--surface); border: 1px solid var(--border); color: var(--text); width: 36px; height: 36px; border-radius: 50%; font-size: 1rem; }
+  .editActions { display: flex; gap: 10px; }
+  .editActions button { flex: 1; padding: 16px; border-radius: var(--radius); border: none; font-size: 1.05rem; font-weight: 700; }
+  .dangerBtn { background: var(--surface-2); color: var(--expense); border: 1px solid var(--expense) !important; }
+  .primaryBtn { background: var(--accent); color: white; }
 
   #toast {
     position: fixed; top: 14px; left: 50%; transform: translateX(-50%) translateY(-20px);
     background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
-    padding: 10px 18px; border-radius: 999px; font-size: 0.9rem;
-    opacity: 0; transition: all 0.25s ease; pointer-events: none; z-index: 20;
+    padding: 12px 20px; border-radius: 999px; font-size: 0.95rem;
+    opacity: 0; transition: all 0.25s ease; pointer-events: none; z-index: 50;
   }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   #toast.error { border-color: var(--expense); color: var(--expense); }
@@ -122,54 +186,116 @@
   <div id="loginError"></div>
 </div>
 
-<div id="mainScreen" class="screen hidden">
+<div id="appScreen" class="screen hidden">
   <header>
     <h1><span id="statusDot" class="statusDot"></span>ActualCel</h1>
     <button id="logoutBtn">Esci</button>
   </header>
 
-  <form id="txForm">
+  <div id="metaError" class="hidden wrap">
+    <span id="metaErrorText"></span>
+    <button id="metaRetryBtn">Riprova</button>
+  </div>
+
+  <div class="accountBar">
+    <div class="wrap">
+      <select id="account"></select>
+    </div>
+  </div>
+
+  <div class="tabBar">
+    <button type="button" id="tabNew" class="active">Nuovo</button>
+    <button type="button" id="tabHistory">Storico</button>
+  </div>
+
+  <div id="newScreen">
+    <form id="txForm">
+      <div class="segmented">
+        <button type="button" id="btnExpense" class="active expense">Uscita</button>
+        <button type="button" id="btnIncome" class="income">Entrata</button>
+      </div>
+
+      <div class="amountWrap">
+        <span>€</span>
+        <input id="amount" type="text" inputmode="decimal" placeholder="0,00" autocomplete="off" />
+      </div>
+
+      <div class="field">
+        <label for="payee">Beneficiario</label>
+        <input id="payee" type="text" list="payeeList" autocomplete="off" placeholder="Chi hai pagato / da chi hai ricevuto" />
+        <datalist id="payeeList"></datalist>
+      </div>
+
+      <div class="field">
+        <label for="category">Categoria</label>
+        <select id="category">
+          <option value="">— nessuna —</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="date">Data</label>
+        <input id="date" type="date" required />
+      </div>
+
+      <div class="field">
+        <label for="notes">Note</label>
+        <input id="notes" type="text" autocomplete="off" placeholder="Opzionale — usa #tag per un tag" />
+      </div>
+    </form>
+  </div>
+
+  <div id="historyScreen" class="hidden">
+    <div id="historyLoading">Carico lo storico…</div>
+    <div id="historyEmpty" class="hidden">Nessuna transazione negli ultimi 60 giorni.</div>
+    <div id="historyList"></div>
+  </div>
+
+  <div class="saveBar" id="saveBar">
+    <button id="saveBtn" type="submit" form="txForm">Salva</button>
+  </div>
+</div>
+
+<div id="editOverlay" class="overlay hidden">
+  <div class="editSheet">
+    <div class="editHeader"><span>Modifica transazione</span><button type="button" id="editClose">✕</button></div>
+
     <div class="segmented">
-      <button type="button" id="btnExpense" class="active expense">Uscita</button>
-      <button type="button" id="btnIncome" class="income">Entrata</button>
+      <button type="button" id="editBtnExpense" class="active expense">Uscita</button>
+      <button type="button" id="editBtnIncome" class="income">Entrata</button>
     </div>
 
     <div class="amountWrap">
       <span>€</span>
-      <input id="amount" type="text" inputmode="decimal" placeholder="0,00" autocomplete="off" />
+      <input id="editAmount" type="text" inputmode="decimal" autocomplete="off" />
     </div>
 
     <div class="field">
-      <label for="account">Conto</label>
-      <select id="account" required></select>
+      <label for="editPayee">Beneficiario</label>
+      <input id="editPayee" type="text" list="payeeList" autocomplete="off" />
     </div>
 
     <div class="field">
-      <label for="payee">Beneficiario</label>
-      <input id="payee" type="text" list="payeeList" autocomplete="off" placeholder="Chi hai pagato / da chi hai ricevuto" />
-      <datalist id="payeeList"></datalist>
-    </div>
-
-    <div class="field">
-      <label for="category">Categoria</label>
-      <select id="category">
+      <label for="editCategory">Categoria</label>
+      <select id="editCategory">
         <option value="">— nessuna —</option>
       </select>
     </div>
 
     <div class="field">
-      <label for="date">Data</label>
-      <input id="date" type="date" required />
+      <label for="editDate">Data</label>
+      <input id="editDate" type="date" />
     </div>
 
     <div class="field">
-      <label for="notes">Note</label>
-      <input id="notes" type="text" autocomplete="off" placeholder="Opzionale — usa #tag per un tag" />
+      <label for="editNotes">Note</label>
+      <input id="editNotes" type="text" autocomplete="off" />
     </div>
-  </form>
 
-  <div class="saveBar">
-    <button id="saveBtn" type="submit" form="txForm">Salva</button>
+    <div class="editActions">
+      <button type="button" id="editDeleteBtn" class="dangerBtn">Elimina</button>
+      <button type="button" id="editSaveBtn" class="primaryBtn">Salva modifiche</button>
+    </div>
   </div>
 </div>
 
@@ -179,20 +305,34 @@
 (function () {
   var state = {
     type: 'expense',
+    editType: 'expense',
     meta: null,
+    categoryMap: {},
+    payeeMap: {},
+    editingId: null,
   };
 
   var loginScreen = document.getElementById('loginScreen');
-  var mainScreen = document.getElementById('mainScreen');
+  var appScreen = document.getElementById('appScreen');
   var pinInput = document.getElementById('pinInput');
   var unlockBtn = document.getElementById('unlockBtn');
   var loginError = document.getElementById('loginError');
   var statusDot = document.getElementById('statusDot');
   var logoutBtn = document.getElementById('logoutBtn');
+  var metaError = document.getElementById('metaError');
+  var metaErrorText = document.getElementById('metaErrorText');
+  var metaRetryBtn = document.getElementById('metaRetryBtn');
+
+  var accountSelect = document.getElementById('account');
+  var tabNew = document.getElementById('tabNew');
+  var tabHistory = document.getElementById('tabHistory');
+  var newScreen = document.getElementById('newScreen');
+  var historyScreen = document.getElementById('historyScreen');
+  var saveBar = document.getElementById('saveBar');
+
   var btnExpense = document.getElementById('btnExpense');
   var btnIncome = document.getElementById('btnIncome');
   var amountInput = document.getElementById('amount');
-  var accountSelect = document.getElementById('account');
   var payeeInput = document.getElementById('payee');
   var payeeList = document.getElementById('payeeList');
   var categorySelect = document.getElementById('category');
@@ -202,11 +342,27 @@
   var saveBtn = document.getElementById('saveBtn');
   var toast = document.getElementById('toast');
 
+  var historyLoading = document.getElementById('historyLoading');
+  var historyEmpty = document.getElementById('historyEmpty');
+  var historyList = document.getElementById('historyList');
+
+  var editOverlay = document.getElementById('editOverlay');
+  var editClose = document.getElementById('editClose');
+  var editBtnExpense = document.getElementById('editBtnExpense');
+  var editBtnIncome = document.getElementById('editBtnIncome');
+  var editAmount = document.getElementById('editAmount');
+  var editPayee = document.getElementById('editPayee');
+  var editCategory = document.getElementById('editCategory');
+  var editDate = document.getElementById('editDate');
+  var editNotes = document.getElementById('editNotes');
+  var editSaveBtn = document.getElementById('editSaveBtn');
+  var editDeleteBtn = document.getElementById('editDeleteBtn');
+
   function showToast(msg, isError) {
     toast.textContent = msg;
     toast.classList.toggle('error', !!isError);
     toast.classList.add('show');
-    setTimeout(function () { toast.classList.remove('show'); }, 2200);
+    setTimeout(function () { toast.classList.remove('show'); }, 2400);
   }
 
   function todayLocalISO() {
@@ -215,17 +371,32 @@
     return new Date(d - tz).toISOString().slice(0, 10);
   }
 
+  function formatEuro(cents) {
+    return (Math.abs(cents) / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  // --- Tipo uscita/entrata (form nuovo + modale modifica) -----------------
+
   function setType(type) {
     state.type = type;
     btnExpense.classList.toggle('active', type === 'expense');
     btnIncome.classList.toggle('active', type === 'income');
-    renderCategories();
+    renderCategoriesInto(categorySelect, type);
   }
 
-  function renderCategories() {
+  function setEditType(type) {
+    state.editType = type;
+    editBtnExpense.classList.toggle('active', type === 'expense');
+    editBtnIncome.classList.toggle('active', type === 'income');
+    var prev = editCategory.value;
+    renderCategoriesInto(editCategory, type);
+    if (prev && state.categoryMap[prev]) editCategory.value = prev;
+  }
+
+  function renderCategoriesInto(select, type) {
     if (!state.meta) return;
-    var groups = state.type === 'income' ? state.meta.incomeGroups : state.meta.expenseGroups;
-    categorySelect.innerHTML = '<option value="">— nessuna —</option>';
+    var groups = type === 'income' ? state.meta.incomeGroups : state.meta.expenseGroups;
+    select.innerHTML = '<option value="">— nessuna —</option>';
     groups.forEach(function (g) {
       if (!g.categories.length) return;
       var og = document.createElement('optgroup');
@@ -236,11 +407,12 @@
         opt.textContent = c.name;
         og.appendChild(opt);
       });
-      categorySelect.appendChild(og);
+      select.appendChild(og);
     });
   }
 
   function populateAccounts(accounts) {
+    var prevValue = accountSelect.value;
     accountSelect.innerHTML = '';
     accounts.forEach(function (a) {
       var opt = document.createElement('option');
@@ -249,36 +421,61 @@
       accountSelect.appendChild(opt);
     });
     var remembered = localStorage.getItem('actualcel_account');
-    if (remembered && accounts.some(function (a) { return a.id === remembered; })) {
+    if (prevValue && accounts.some(function (a) { return a.id === prevValue; })) {
+      accountSelect.value = prevValue;
+    } else if (remembered && accounts.some(function (a) { return a.id === remembered; })) {
       accountSelect.value = remembered;
     }
   }
 
   function populatePayees(payees) {
     payeeList.innerHTML = '';
+    state.payeeMap = {};
     payees.forEach(function (p) {
+      state.payeeMap[p.id] = p.name;
       var opt = document.createElement('option');
       opt.value = p.name;
       payeeList.appendChild(opt);
     });
   }
 
+  function buildCategoryMap(meta) {
+    var map = {};
+    (meta.expenseGroups || []).concat(meta.incomeGroups || []).forEach(function (g) {
+      (g.categories || []).forEach(function (c) { map[c.id] = c.name; });
+    });
+    return map;
+  }
+
+  function showMetaError(msg) {
+    metaErrorText.textContent = msg || 'Il budget non è ancora pronto.';
+    metaError.classList.remove('hidden');
+    statusDot.classList.add('err');
+    statusDot.classList.remove('ok');
+  }
+
+  function hideMetaError() {
+    metaError.classList.add('hidden');
+  }
+
   function loadMeta() {
+    hideMetaError();
     return fetch('/api/meta').then(function (r) {
-      if (!r.ok) throw new Error('meta_failed');
+      if (!r.ok) return r.json().then(function (d) { throw new Error((d && d.detail) || 'meta_failed'); });
       return r.json();
     }).then(function (data) {
       state.meta = data;
+      state.categoryMap = buildCategoryMap(data);
       populateAccounts(data.accounts);
       populatePayees(data.payees);
-      renderCategories();
+      renderCategoriesInto(categorySelect, state.type);
       statusDot.classList.add('ok');
       statusDot.classList.remove('err');
-    }).catch(function () {
-      statusDot.classList.add('err');
-      statusDot.classList.remove('ok');
-      showToast('Budget non ancora pronto, riprovo…', true);
-      setTimeout(loadMeta, 4000);
+      if (!data.accounts.length) {
+        showMetaError('Nessun conto trovato nel budget collegato. Controlla ACTUAL_SYNC_ID nello stack Portainer: deve corrispondere esattamente al Sync ID del budget che usi anche dall\'app.');
+      }
+    }).catch(function (err) {
+      showMetaError('Impossibile leggere il budget: ' + (err.message || 'errore sconosciuto') + '. Controlla i log del container actualcel su Portainer.');
     });
   }
 
@@ -294,12 +491,12 @@
     return fetch('/api/session').then(function (r) { return r.json(); }).then(function (d) {
       if (d.authed) {
         loginScreen.classList.add('hidden');
-        mainScreen.classList.remove('hidden');
+        appScreen.classList.remove('hidden');
         dateInput.value = todayLocalISO();
         loadMeta();
       } else {
         loginScreen.classList.remove('hidden');
-        mainScreen.classList.add('hidden');
+        appScreen.classList.add('hidden');
         pinInput.focus();
       }
     });
@@ -334,17 +531,21 @@
     fetch('/api/logout', { method: 'POST' }).then(checkSession);
   });
 
+  metaRetryBtn.addEventListener('click', loadMeta);
+
   btnExpense.addEventListener('click', function () { setType('expense'); });
   btnIncome.addEventListener('click', function () { setType('income'); });
 
   accountSelect.addEventListener('change', function () {
     localStorage.setItem('actualcel_account', accountSelect.value);
+    if (!historyScreen.classList.contains('hidden')) loadHistory();
   });
 
   amountInput.addEventListener('input', function () {
-    // consente sia virgola che punto come separatore decimale
-    var v = amountInput.value.replace(/[^0-9.,]/g, '');
-    amountInput.value = v;
+    amountInput.value = amountInput.value.replace(/[^0-9.,]/g, '');
+  });
+  editAmount.addEventListener('input', function () {
+    editAmount.value = editAmount.value.replace(/[^0-9.,]/g, '');
   });
 
   txForm.addEventListener('submit', function (e) {
@@ -379,13 +580,204 @@
       if (!res.ok) throw new Error(res.data && res.data.error);
       showToast('Salvato ✓');
       resetTransientFields();
-      loadMeta(); // aggiorna elenco beneficiari se ne è stato creato uno nuovo
+      loadMeta();
     }).catch(function () {
       showToast('Salvataggio fallito, riprova', true);
     }).finally(function () {
       saveBtn.disabled = false;
     });
   });
+
+  // --- Tab Nuovo / Storico -------------------------------------------------
+
+  function switchTab(tab) {
+    var isNew = tab === 'new';
+    tabNew.classList.toggle('active', isNew);
+    tabHistory.classList.toggle('active', !isNew);
+    newScreen.classList.toggle('hidden', !isNew);
+    historyScreen.classList.toggle('hidden', isNew);
+    saveBar.classList.toggle('hidden', !isNew);
+    if (!isNew) loadHistory();
+  }
+
+  tabNew.addEventListener('click', function () { switchTab('new'); });
+  tabHistory.addEventListener('click', function () { switchTab('history'); });
+
+  // --- Storico ---------------------------------------------------------
+
+  function loadHistory() {
+    if (!accountSelect.value) return;
+    historyLoading.classList.remove('hidden');
+    historyEmpty.classList.add('hidden');
+    historyList.innerHTML = '';
+    fetch('/api/transactions?accountId=' + encodeURIComponent(accountSelect.value) + '&days=60')
+      .then(function (r) {
+        if (!r.ok) return r.json().then(function (d) { throw new Error((d && d.detail) || 'list_failed'); });
+        return r.json();
+      })
+      .then(function (data) {
+        historyLoading.classList.add('hidden');
+        renderHistory(data.transactions || []);
+      })
+      .catch(function (err) {
+        historyLoading.classList.add('hidden');
+        showToast('Storico non disponibile: ' + (err.message || ''), true);
+      });
+  }
+
+  function renderHistory(transactions) {
+    historyList.innerHTML = '';
+    if (!transactions.length) {
+      historyEmpty.classList.remove('hidden');
+      return;
+    }
+    historyEmpty.classList.add('hidden');
+
+    var groups = [];
+    var currentDate = null;
+    var currentGroup = null;
+    transactions.forEach(function (t) {
+      if (t.date !== currentDate) {
+        currentDate = t.date;
+        currentGroup = { date: t.date, items: [] };
+        groups.push(currentGroup);
+      }
+      currentGroup.items.push(t);
+    });
+
+    groups.forEach(function (g) {
+      var wrap = document.createElement('div');
+      wrap.className = 'historyGroup';
+      var label = document.createElement('div');
+      label.className = 'historyGroupLabel';
+      label.textContent = formatDateLabel(g.date);
+      wrap.appendChild(label);
+
+      g.items.forEach(function (t) {
+        wrap.appendChild(renderTxRow(t));
+      });
+      historyList.appendChild(wrap);
+    });
+  }
+
+  function formatDateLabel(iso) {
+    var d = new Date(iso + 'T00:00:00');
+    return d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
+  }
+
+  function renderTxRow(t) {
+    var row = document.createElement('div');
+    row.className = 'txRow' + (t.isTransfer ? ' transfer' : '');
+
+    var info = document.createElement('div');
+    info.className = 'txInfo';
+    var payeeEl = document.createElement('div');
+    payeeEl.className = 'txPayee';
+    payeeEl.textContent = t.isTransfer
+      ? 'Trasferimento tra conti'
+      : (t.payee && state.payeeMap[t.payee]) || t.payeeName || '(senza beneficiario)';
+    var catEl = document.createElement('div');
+    catEl.className = 'txCategory';
+    catEl.textContent = (t.category && state.categoryMap[t.category]) || (t.notes ? t.notes : '—');
+    info.appendChild(payeeEl);
+    info.appendChild(catEl);
+
+    var amountEl = document.createElement('div');
+    amountEl.className = 'txAmount ' + (t.amount < 0 ? 'expense' : 'income');
+    amountEl.textContent = (t.amount < 0 ? '-' : '+') + '€' + formatEuro(t.amount);
+
+    row.appendChild(info);
+    row.appendChild(amountEl);
+
+    if (!t.isTransfer) {
+      row.addEventListener('click', function () { openEdit(t); });
+    }
+    return row;
+  }
+
+  // --- Modale di modifica -------------------------------------------------
+
+  function openEdit(t) {
+    state.editingId = t.id;
+    var type = t.amount < 0 ? 'expense' : 'income';
+    setEditType(type);
+    editAmount.value = formatEuro(t.amount).replace('.', ',');
+    editPayee.value = (t.payee && state.payeeMap[t.payee]) || t.payeeName || '';
+    editCategory.value = t.category || '';
+    editDate.value = t.date;
+    editNotes.value = t.notes || '';
+    editOverlay.classList.remove('hidden');
+  }
+
+  function closeEdit() {
+    editOverlay.classList.add('hidden');
+    state.editingId = null;
+  }
+
+  editClose.addEventListener('click', closeEdit);
+  editOverlay.addEventListener('click', function (e) { if (e.target === editOverlay) closeEdit(); });
+  editBtnExpense.addEventListener('click', function () { setEditType('expense'); });
+  editBtnIncome.addEventListener('click', function () { setEditType('income'); });
+
+  editSaveBtn.addEventListener('click', function () {
+    if (!state.editingId) return;
+    var raw = editAmount.value.replace(',', '.');
+    var amount = parseFloat(raw);
+    if (!amount || amount <= 0) {
+      showToast('Inserisci un importo valido', true);
+      return;
+    }
+    editSaveBtn.disabled = true;
+    fetch('/api/transactions/' + encodeURIComponent(state.editingId), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: state.editType,
+        amount: amount,
+        payeeName: editPayee.value,
+        categoryId: editCategory.value || null,
+        date: editDate.value,
+        notes: editNotes.value,
+      }),
+    }).then(function (r) {
+      return r.json().then(function (data) { return { ok: r.ok, data: data }; });
+    }).then(function (res) {
+      if (!res.ok) throw new Error(res.data && res.data.error);
+      showToast('Modifica salvata ✓');
+      closeEdit();
+      loadHistory();
+    }).catch(function () {
+      showToast('Modifica fallita, riprova', true);
+    }).finally(function () {
+      editSaveBtn.disabled = false;
+    });
+  });
+
+  editDeleteBtn.addEventListener('click', function () {
+    if (!state.editingId) return;
+    if (!confirm('Eliminare questa transazione?')) return;
+    editDeleteBtn.disabled = true;
+    fetch('/api/transactions/' + encodeURIComponent(state.editingId), { method: 'DELETE' })
+      .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+      .then(function (res) {
+        if (!res.ok) throw new Error(res.data && res.data.error);
+        showToast('Transazione eliminata');
+        closeEdit();
+        loadHistory();
+      })
+      .catch(function () {
+        showToast('Cancellazione fallita, riprova', true);
+      })
+      .finally(function () {
+        editDeleteBtn.disabled = false;
+      });
+  });
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js').catch(function () {});
+    });
+  }
 
   checkSession();
 })();
