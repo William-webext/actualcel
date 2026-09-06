@@ -258,21 +258,37 @@ app.get('/api/transactions', requireAuth, requireBudgetReady, async (req, res) =
 
   try {
     await api.sync();
-    const transactions = await api.getTransactions(accountId, toISO(start), toISO(end));
-    const list = transactions
-      .filter((t) => !t.is_parent) // le transazioni divise (split) restano fuori dallo storico rapido
-      .map((t) => ({
-        id: t.id,
-        date: t.date,
-        amount: t.amount,
-        payee: t.payee || null,
-        payeeName: t.imported_payee || null,
-        category: t.category || null,
-        notes: t.notes || '',
-        cleared: !!t.cleared,
-        isTransfer: !!t.transfer_id,
-      }))
-      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+
+    let accountsToQuery;
+    if (accountId === 'all') {
+      const accounts = await api.getAccounts();
+      accountsToQuery = accounts.filter((a) => !a.closed).map((a) => ({ id: a.id, name: a.name }));
+    } else {
+      accountsToQuery = [{ id: accountId, name: null }];
+    }
+
+    const perAccount = await Promise.all(
+      accountsToQuery.map(async (acc) => {
+        const transactions = await api.getTransactions(acc.id, toISO(start), toISO(end));
+        return transactions
+          .filter((t) => !t.is_parent) // le transazioni divise (split) restano fuori dallo storico rapido
+          .map((t) => ({
+            id: t.id,
+            date: t.date,
+            amount: t.amount,
+            payee: t.payee || null,
+            payeeName: t.imported_payee || null,
+            category: t.category || null,
+            notes: t.notes || '',
+            cleared: !!t.cleared,
+            isTransfer: !!t.transfer_id,
+            accountId: acc.id,
+            accountName: acc.name,
+          }));
+      }),
+    );
+
+    const list = perAccount.flat().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
     res.json({ transactions: list });
   } catch (err) {
     console.error('[actualcel] Errore /api/transactions:', err);
@@ -282,7 +298,7 @@ app.get('/api/transactions', requireAuth, requireBudgetReady, async (req, res) =
 
 app.patch('/api/transactions/:id', requireAuth, requireBudgetReady, async (req, res) => {
   const { id } = req.params;
-  const { payeeName, categoryId, notes } = req.body || {};
+  const { payeeName, categoryId, notes, accountId } = req.body || {};
   const parsed = parseAmountAndDate(req.body);
   if (parsed.error) return res.status(400).json({ error: parsed.error });
 
@@ -293,6 +309,7 @@ app.patch('/api/transactions/:id', requireAuth, requireBudgetReady, async (req, 
     category: categoryId || null,
   };
   if (payeeName && payeeName.trim()) fields.payee_name = payeeName.trim();
+  if (accountId) fields.account = accountId;
 
   try {
     await api.updateTransaction(id, fields);

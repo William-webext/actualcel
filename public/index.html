@@ -75,14 +75,7 @@
 
   .wrap { max-width: 520px; margin: 0 auto; padding: 0 18px; }
 
-  .accountBar { padding: 0 18px 14px; }
-  .accountBar .wrap { padding: 0; }
-  #account {
-    width: 100%; padding: 16px; border-radius: var(--radius); border: 1px solid var(--border);
-    background: var(--surface); color: var(--text); font-size: 1.1rem; font-weight: 600;
-  }
-
-  .tabBar { display: flex; gap: 10px; padding: 0 18px 16px; max-width: 520px; margin: 0 auto; }
+  .tabBar { display: flex; gap: 10px; padding: 14px 18px 16px; max-width: 520px; margin: 0 auto; }
   .tabBar button {
     flex: 1; padding: 13px; border-radius: var(--radius); border: 1px solid var(--border);
     background: var(--surface); color: var(--text-dim); font-size: 1rem; font-weight: 700;
@@ -197,12 +190,6 @@
     <button id="metaRetryBtn">Riprova</button>
   </div>
 
-  <div class="accountBar">
-    <div class="wrap">
-      <select id="account"></select>
-    </div>
-  </div>
-
   <div class="tabBar">
     <button type="button" id="tabNew" class="active">Nuovo</button>
     <button type="button" id="tabHistory">Storico</button>
@@ -218,6 +205,11 @@
       <div class="amountWrap">
         <span>€</span>
         <input id="amount" type="text" inputmode="decimal" placeholder="0,00" autocomplete="off" />
+      </div>
+
+      <div class="field">
+        <label for="account">Conto</label>
+        <select id="account" required></select>
       </div>
 
       <div class="field">
@@ -246,6 +238,10 @@
   </div>
 
   <div id="historyScreen" class="hidden">
+    <div class="field">
+      <label for="historyAccount">Conto</label>
+      <select id="historyAccount"></select>
+    </div>
     <div id="historyLoading">Carico lo storico…</div>
     <div id="historyEmpty" class="hidden">Nessuna transazione negli ultimi 60 giorni.</div>
     <div id="historyList"></div>
@@ -268,6 +264,11 @@
     <div class="amountWrap">
       <span>€</span>
       <input id="editAmount" type="text" inputmode="decimal" autocomplete="off" />
+    </div>
+
+    <div class="field">
+      <label for="editAccount">Conto</label>
+      <select id="editAccount"></select>
     </div>
 
     <div class="field">
@@ -324,6 +325,8 @@
   var metaRetryBtn = document.getElementById('metaRetryBtn');
 
   var accountSelect = document.getElementById('account');
+  var historyAccountSelect = document.getElementById('historyAccount');
+  var editAccountSelect = document.getElementById('editAccount');
   var tabNew = document.getElementById('tabNew');
   var tabHistory = document.getElementById('tabHistory');
   var newScreen = document.getElementById('newScreen');
@@ -411,21 +414,36 @@
     });
   }
 
-  function populateAccounts(accounts) {
-    var prevValue = accountSelect.value;
-    accountSelect.innerHTML = '';
+  function fillAccountSelect(select, accounts, opts) {
+    opts = opts || {};
+    var prevValue = select.value;
+    select.innerHTML = '';
+    if (opts.includeAll) {
+      var allOpt = document.createElement('option');
+      allOpt.value = 'all';
+      allOpt.textContent = 'Tutti i conti';
+      select.appendChild(allOpt);
+    }
     accounts.forEach(function (a) {
       var opt = document.createElement('option');
       opt.value = a.id;
       opt.textContent = a.name + (a.offbudget ? ' (fuori budget)' : '');
-      accountSelect.appendChild(opt);
+      select.appendChild(opt);
     });
-    var remembered = localStorage.getItem('actualcel_account');
-    if (prevValue && accounts.some(function (a) { return a.id === prevValue; })) {
-      accountSelect.value = prevValue;
-    } else if (remembered && accounts.some(function (a) { return a.id === remembered; })) {
-      accountSelect.value = remembered;
+    var valid = opts.includeAll ? ['all'].concat(accounts.map(function (a) { return a.id; })) : accounts.map(function (a) { return a.id; });
+    if (prevValue && valid.indexOf(prevValue) !== -1) {
+      select.value = prevValue;
+    } else if (opts.rememberKey) {
+      var remembered = localStorage.getItem(opts.rememberKey);
+      if (remembered && valid.indexOf(remembered) !== -1) select.value = remembered;
+      else if (opts.defaultValue && valid.indexOf(opts.defaultValue) !== -1) select.value = opts.defaultValue;
     }
+  }
+
+  function populateAccounts(accounts) {
+    fillAccountSelect(accountSelect, accounts, { rememberKey: 'actualcel_account' });
+    fillAccountSelect(historyAccountSelect, accounts, { includeAll: true, rememberKey: 'actualcel_history_account', defaultValue: 'all' });
+    fillAccountSelect(editAccountSelect, accounts, {});
   }
 
   function populatePayees(payees) {
@@ -538,7 +556,11 @@
 
   accountSelect.addEventListener('change', function () {
     localStorage.setItem('actualcel_account', accountSelect.value);
-    if (!historyScreen.classList.contains('hidden')) loadHistory();
+  });
+
+  historyAccountSelect.addEventListener('change', function () {
+    localStorage.setItem('actualcel_history_account', historyAccountSelect.value);
+    loadHistory();
   });
 
   amountInput.addEventListener('input', function () {
@@ -606,11 +628,11 @@
   // --- Storico ---------------------------------------------------------
 
   function loadHistory() {
-    if (!accountSelect.value) return;
+    if (!historyAccountSelect.value) return;
     historyLoading.classList.remove('hidden');
     historyEmpty.classList.add('hidden');
     historyList.innerHTML = '';
-    fetch('/api/transactions?accountId=' + encodeURIComponent(accountSelect.value) + '&days=60')
+    fetch('/api/transactions?accountId=' + encodeURIComponent(historyAccountSelect.value) + '&days=60')
       .then(function (r) {
         if (!r.ok) return r.json().then(function (d) { throw new Error((d && d.detail) || 'list_failed'); });
         return r.json();
@@ -678,7 +700,9 @@
       : (t.payee && state.payeeMap[t.payee]) || t.payeeName || '(senza beneficiario)';
     var catEl = document.createElement('div');
     catEl.className = 'txCategory';
-    catEl.textContent = (t.category && state.categoryMap[t.category]) || (t.notes ? t.notes : '—');
+    var catText = (t.category && state.categoryMap[t.category]) || (t.notes ? t.notes : '—');
+    if (historyAccountSelect.value === 'all' && t.accountName) catText = t.accountName + ' · ' + catText;
+    catEl.textContent = catText;
     info.appendChild(payeeEl);
     info.appendChild(catEl);
 
@@ -702,6 +726,7 @@
     var type = t.amount < 0 ? 'expense' : 'income';
     setEditType(type);
     editAmount.value = formatEuro(t.amount).replace('.', ',');
+    editAccountSelect.value = t.accountId || '';
     editPayee.value = (t.payee && state.payeeMap[t.payee]) || t.payeeName || '';
     editCategory.value = t.category || '';
     editDate.value = t.date;
@@ -727,6 +752,10 @@
       showToast('Inserisci un importo valido', true);
       return;
     }
+    if (!editAccountSelect.value) {
+      showToast('Seleziona un conto', true);
+      return;
+    }
     editSaveBtn.disabled = true;
     fetch('/api/transactions/' + encodeURIComponent(state.editingId), {
       method: 'PATCH',
@@ -734,6 +763,7 @@
       body: JSON.stringify({
         type: state.editType,
         amount: amount,
+        accountId: editAccountSelect.value,
         payeeName: editPayee.value,
         categoryId: editCategory.value || null,
         date: editDate.value,
