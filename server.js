@@ -105,7 +105,46 @@ async function connectOnce() {
   budgetReady = true;
   lastSyncError = null;
   console.log('[actualcel] Budget caricato correttamente.');
+  tuneDatabase();
   logBudgetStats();
+}
+
+function findBudgetDbPath() {
+  const entries = fs.readdirSync(DATA_DIR, { withFileTypes: true });
+  const budgetDirEntry = entries.find(
+    (e) => e.isDirectory() && fs.existsSync(path.join(DATA_DIR, e.name, 'db.sqlite')),
+  );
+  if (!budgetDirEntry) return null;
+  return { name: budgetDirEntry.name, dbPath: path.join(DATA_DIR, budgetDirEntry.name, 'db.sqlite') };
+}
+
+// @actual-app/api apre il suo db.sqlite locale senza impostare nessun PRAGMA
+// (usa i default di better-sqlite3: rollback journal, cioè per ogni singola
+// scrittura crea/fsync-a/cancella un file di journal a parte). Su un NAS con
+// disco meccanico questo può costare centinaia di ms per ogni messaggio, e
+// durante un catch-up di sync che ne riapplica una decina è lì che se ne
+// vanno i secondi. journal_mode=WAL è un'impostazione persistita nel FILE
+// stesso (non nella singola connessione): impostarla qui una volta per avvio
+// vale anche per le connessioni che @actual-app/api apre dopo su questo
+// stesso file, ed evita quel giro di journal per ogni scrittura. NOTA:
+// "synchronous" invece NON è persistito nel file — vale solo per la nostra
+// connessione, che chiudiamo subito dopo — quindi la connessione di
+// @actual-app/api riparte comunque con il suo default; lo impostiamo qui solo
+// perché non costa nulla provarci. Il beneficio vero è journal_mode=WAL.
+// Best-effort: se fallisce non blocca l'avvio, si torna al comportamento di
+// prima.
+function tuneDatabase() {
+  try {
+    const found = findBudgetDbPath();
+    if (!found) return;
+    const db = new Database(found.dbPath);
+    const journalMode = db.pragma('journal_mode = WAL', { simple: true });
+    db.pragma('synchronous = NORMAL');
+    db.close();
+    console.log(`[actualcel] Ottimizzazione db locale (${found.name}): journal_mode=${journalMode}`);
+  } catch (e) {
+    console.warn('[actualcel] Impossibile ottimizzare il db locale (continuo comunque):', e.message);
+  }
 }
 
 // Diagnostica di sola lettura: quante righe ha davvero il replica locale del
@@ -115,16 +154,12 @@ async function connectOnce() {
 // tempo…) invece di continuare a indovinare. Non modifica nulla.
 function logBudgetStats() {
   try {
-    const entries = fs.readdirSync(DATA_DIR, { withFileTypes: true });
-    const budgetDirEntry = entries.find(
-      (e) => e.isDirectory() && fs.existsSync(path.join(DATA_DIR, e.name, 'db.sqlite')),
-    );
-    if (!budgetDirEntry) {
+    const found = findBudgetDbPath();
+    if (!found) {
       console.warn('[actualcel] Statistiche db: nessuna cartella budget trovata sotto', DATA_DIR);
       return;
     }
-    const dbPath = path.join(DATA_DIR, budgetDirEntry.name, 'db.sqlite');
-    const db = new Database(dbPath, { readonly: true });
+    const db = new Database(found.dbPath, { readonly: true });
     const count = (table) => {
       try {
         return db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n;
@@ -132,7 +167,7 @@ function logBudgetStats() {
         return 'n/d (' + e.message + ')';
       }
     };
-    console.log('[actualcel] Statistiche budget locale (' + budgetDirEntry.name + '):', {
+    console.log('[actualcel] Statistiche budget locale (' + found.name + '):', {
       transactions: count('transactions'),
       categories: count('categories'),
       category_groups: count('category_groups'),
