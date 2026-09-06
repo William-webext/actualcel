@@ -1,7 +1,7 @@
 # Aggiungi questo servizio allo stack Portainer dove gira già actual_server,
-# così condividono la stessa rete Docker. Nessun clone/build manuale sul NAS:
-# "build" punta direttamente al repository Git pubblico, Docker lo scarica e
-# lo builda da solo quando fai "Update the stack" in Portainer.
+# così condividono la stessa rete Docker. L'immagine viene buildata da
+# GitHub Actions ad ogni push su main e pubblicata su ghcr.io — qui la tiri
+# giù già pronta, nessun build sul NAS.
 #
 # Le variabili ${...} qui sotto NON vanno scritte a mano in questo file:
 # in Portainer, sotto l'editor dello stack, c'è la sezione
@@ -11,8 +11,7 @@
 
   actualcel:
     container_name: actualcel
-    image: actualcel:latest
-    build: https://github.com/william-webext/actualcel.git
+    image: ghcr.io/william-webext/actualcel:latest
     restart: unless-stopped
     environment:
       ACTUAL_SERVER_URL: http://actual_server:5006

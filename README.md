@@ -24,11 +24,18 @@ git remote add origin https://github.com/william-webext/actualcel.git
 git push -u origin main
 ```
 
-Se non hai ancora un token/SSH configurato per `william-webext` su questa macchina, GitHub te lo chiede al primo `push` (token di accesso personale al posto della password, oppure chiave SSH se usi l'URL `git@github.com:william-webext/actualcel.git`). Nota: repo pubblico significa che chiunque vede il codice, ma nessun segreto ci finisce dentro — password, sync ID, PIN restano solo dentro Portainer (punto 3), mai nel repository.
+Se non hai ancora un token/SSH configurato per `william-webext` su questa macchina, GitHub te lo chiede al primo `push` (token di accesso personale al posto della password, oppure chiave SSH se usi l'URL `git@github.com:william-webext/actualcel.git`). Nota: repo pubblico significa che chiunque vede il codice, ma nessun segreto ci finisce dentro — password, sync ID, PIN restano solo dentro Portainer (punto 4), mai nel repository.
 
-## 3. Aggiungere il servizio allo stack Portainer esistente — nessun clone o build manuale sul NAS
+## 3. Lasciare che GitHub Actions costruisca l'immagine
 
-`compose.snippet.yml` usa `build: https://github.com/william-webext/actualcel.git`: è Docker stesso a scaricare e buildare il repo quando fai il deploy, non devi mettere file sul NAS né aprire una shell.
+Nel repo c'è già `.github/workflows/docker-publish.yml`: ad ogni push su `main` builda l'immagine dal `Dockerfile` e la pubblica su **GHCR** (GitHub Container Registry) come `ghcr.io/william-webext/actualcel:latest` — non serve nessun secret da configurare, usa il token automatico di GitHub Actions.
+
+1. Dopo il push del punto 2, vai sulla tab **Actions** del repo: dovresti vedere il workflow partire da solo e completarsi in ~1 minuto.
+2. **Passaggio che si dimentica facilmente**: i package GHCR nascono **privati di default**, anche in un repo pubblico — Portainer non riuscirebbe a scaricarlo senza autenticarsi. Vai su github.com → la tua icona profilo → **Your packages** → `actualcel` → **Package settings** (a destra) → in fondo, sezione "Danger Zone" → **Change visibility** → **Public** → conferma scrivendo il nome del package. È un'operazione irreversibile (non puoi tornare privato), ma per questo progetto va benissimo così.
+
+## 4. Aggiungere il servizio allo stack Portainer esistente — nessun clone o build manuale sul NAS
+
+`compose.snippet.yml` usa `image: ghcr.io/william-webext/actualcel:latest`: Portainer la tira giù già pronta, non devi mettere file sul NAS né aprire una shell.
 
 1. Portainer → **Stacks** → apri lo stack di Actual (quello di Marius, con `actual_server`) → **Editor**.
 2. Incolla il contenuto di `compose.snippet.yml` sotto il servizio `actual_server` esistente, stessa indentazione (allo stesso livello degli altri servizi sotto `services:`).
@@ -38,12 +45,12 @@ Se non hai ancora un token/SSH configurato per `william-webext` su questa macchi
    - `ACTUAL_ENCRYPTION_PASSWORD` → solo se hai la crittografia end-to-end attiva, altrimenti lasciala vuota/ometti
    - `APP_PIN` → il PIN che userai da mobile
    - `SESSION_SECRET` → una stringa lunga a caso, es. generata con `openssl rand -hex 32` (da un terminale qualsiasi, anche sul tuo PC)
-4. **Update the stack**. Al primo deploy la build da Git richiede qualche decina di secondi in più del solito — normale.
+4. **Update the stack** (spunta "Re-pull image" se Portainer te lo chiede).
 5. Verifica nei log del container `actualcel` (Portainer → Containers → actualcel → Logs) che appaia "Budget caricato correttamente."
 
-Per aggiornare dopo un futuro `git push` su GitHub: torna sullo stack e rifai **Update the stack**. Se Portainer non rileva da solo che deve ricostruire l'immagine (capita, essendo build locale e non un'immagine da registry), elimina prima l'immagine `actualcel:latest` da Portainer → Images, poi rifai Update: così è costretto a ributtare giù il repo e ricostruirla.
+Per aggiornare dopo un futuro `git push` su GitHub: aspetta che il workflow su Actions finisca, poi torna sullo stack in Portainer e rifai **Update the stack** spuntando "Re-pull image and redeploy" (o l'equivalente nella tua versione di Portainer) così scarica il tag `:latest` appena pubblicato invece di riusare quello vecchio in cache.
 
-## 4. Esporlo con Cloudflare Tunnel
+## 5. Esporlo con Cloudflare Tunnel
 
 Stessa procedura che hai già fatto per Actual: Cloudflare Zero Trust → Networks → Tunnels → il tuo tunnel → Public Hostname → Add:
 
@@ -51,7 +58,7 @@ Stessa procedura che hai già fatto per Actual: Cloudflare Zero Trust → Networ
 - Service type: HTTP
 - URL: `actualcel:8730` se `cloudflared` condivide la rete Docker col container, altrimenti `<IP-LAN-NAS>:8730`
 
-## 5. Uso
+## 6. Uso
 
 Apri l'URL da mobile, inserisci il PIN, salva sulla home screen per un accesso tipo app (il tag `apple-mobile-web-app-capable` è già nell'pagina). Il form dopo un salvataggio si svuota solo su importo/beneficiario/note e resta pronto per il prossimo inserimento — conto, categoria e data restano impostati per velocizzare inserimenti multipli.
 
