@@ -8,7 +8,7 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "@actual-app/api": "^25.9.0",
+    "@actual-app/api": "^26.9.0",
     "express": "^4.19.2",
     "express-rate-limit": "^7.4.0",
     "express-session": "^1.18.0"
