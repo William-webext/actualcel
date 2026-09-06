@@ -202,9 +202,26 @@ async function timedSync(label) {
   console.log(`[actualcel] sync (${label}) completata in ${lastSyncAt - t0}ms`);
 }
 
-async function syncIfStale(label) {
+// Il sito ufficiale di Actual sembra "istantaneo" perché il motore di sync
+// gira nel browser: la modifica va subito nella copia locale (lì il
+// browser stesso), e l'invio al server parte in background senza che
+// l'interfaccia aspetti. Da noi la copia locale è sul NAS, non sul telefono,
+// ma il principio è lo stesso: updateTransaction/deleteTransaction/
+// addTransactions scrivono SUBITO nella copia locale (sincrono, già fatto
+// prima di arrivare qui) — è solo il push verso actual_server a essere
+// lento in certi casi (vedi timedSync). Non ha senso far aspettare l'utente
+// per quel passaggio: lo lanciamo e rispondiamo subito, esattamente come fa
+// il sito. Se il push fallisce lo logghiamo soltanto: la prossima sync
+// (dalla prossima richiesta, o dal giro periodico) lo recupera comunque.
+function syncInBackground(label) {
+  timedSync(label).catch((e) => {
+    console.warn(`[actualcel] sync (${label}) in background fallita, verrà ritentata più tardi:`, e.message);
+  });
+}
+
+function syncIfStaleInBackground(label) {
   if (Date.now() - lastSyncAt < SYNC_THROTTLE_MS) return;
-  await timedSync(label);
+  syncInBackground(label);
 }
 
 function requireBudgetReady(req, res, next) {
@@ -271,7 +288,7 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/meta', requireAuth, requireBudgetReady, async (req, res) => {
   try {
-    await syncIfStale('meta');
+    syncIfStaleInBackground('meta');
 
     const [accounts, groups, payees] = await Promise.all([
       api.getAccounts(),
@@ -370,8 +387,8 @@ app.post('/api/transaction', requireAuth, requireBudgetReady, async (req, res) =
 
   try {
     const ids = await api.addTransactions(accountId, [tx], undefined, true);
-    await timedSync('add');
     res.json({ ok: true, id: ids && ids[0] });
+    syncInBackground('add');
   } catch (err) {
     console.error('[actualcel] Errore /api/transaction:', err);
     res.status(500).json({ error: 'add_failed', detail: err.message });
@@ -390,7 +407,7 @@ app.get('/api/transactions', requireAuth, requireBudgetReady, async (req, res) =
   const toISO = (d) => d.toISOString().slice(0, 10);
 
   try {
-    await syncIfStale('list');
+    syncIfStaleInBackground('list');
 
     let accountsToQuery;
     if (accountId === 'all') {
@@ -448,8 +465,8 @@ app.patch('/api/transactions/:id', requireAuth, requireBudgetReady, async (req, 
       fields.payee = await resolvePayeeIdByName(payeeName);
     }
     await api.updateTransaction(id, fields);
-    await timedSync('edit');
     res.json({ ok: true });
+    syncInBackground('edit');
   } catch (err) {
     console.error('[actualcel] Errore modifica transazione:', err);
     res.status(500).json({ error: 'update_failed', detail: err.message });
@@ -460,8 +477,8 @@ app.delete('/api/transactions/:id', requireAuth, requireBudgetReady, async (req,
   const { id } = req.params;
   try {
     await api.deleteTransaction(id);
-    await timedSync('delete');
     res.json({ ok: true });
+    syncInBackground('delete');
   } catch (err) {
     console.error('[actualcel] Errore cancellazione transazione:', err);
     res.status(500).json({ error: 'delete_failed', detail: err.message });
