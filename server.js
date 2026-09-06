@@ -106,6 +106,32 @@ async function connectOnce() {
   console.log('[actualcel] Budget caricato correttamente.');
 }
 
+// api.sync() è sempre una richiesta di rete verso actual_server: a volte è
+// una verifica veloce (0 messaggi), altre volte deve scaricare un blocco più
+// grosso ed è quello a incidere di più sui tempi di attesa. Il client, dopo
+// ogni salvataggio/modifica/cancellazione, ricarica subito la lista o i
+// metadati (loadHistory()/loadMeta()) — cosa che fa scattare UN'ALTRA sync a
+// pochi istanti dalla prima, raddoppiando l'attesa senza portare nessuna
+// informazione nuova. Le scritture (aggiungi/modifica/elimina) fanno sempre
+// una sync vera, per spingere subito la modifica sul server; le sole letture
+// (elenco/meta), se richiamate entro pochi secondi da una sync già fatta,
+// vengono saltate: restano comunque aggiornate dalla sync periodica e da
+// qualunque sync "vera" successiva.
+let lastSyncAt = 0;
+const SYNC_THROTTLE_MS = 3000;
+
+async function timedSync(label) {
+  const t0 = Date.now();
+  await api.sync();
+  lastSyncAt = Date.now();
+  console.log(`[actualcel] sync (${label}) completata in ${lastSyncAt - t0}ms`);
+}
+
+async function syncIfStale(label) {
+  if (Date.now() - lastSyncAt < SYNC_THROTTLE_MS) return;
+  await timedSync(label);
+}
+
 function requireBudgetReady(req, res, next) {
   if (!budgetReady) {
     return res.status(503).json({ error: 'budget_not_ready', detail: lastSyncError });
@@ -170,7 +196,7 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/meta', requireAuth, requireBudgetReady, async (req, res) => {
   try {
-    await api.sync();
+    await syncIfStale('meta');
 
     const [accounts, groups, payees] = await Promise.all([
       api.getAccounts(),
@@ -269,7 +295,7 @@ app.post('/api/transaction', requireAuth, requireBudgetReady, async (req, res) =
 
   try {
     const ids = await api.addTransactions(accountId, [tx], undefined, true);
-    await api.sync();
+    await timedSync('add');
     res.json({ ok: true, id: ids && ids[0] });
   } catch (err) {
     console.error('[actualcel] Errore /api/transaction:', err);
@@ -289,7 +315,7 @@ app.get('/api/transactions', requireAuth, requireBudgetReady, async (req, res) =
   const toISO = (d) => d.toISOString().slice(0, 10);
 
   try {
-    await api.sync();
+    await syncIfStale('list');
 
     let accountsToQuery;
     if (accountId === 'all') {
@@ -347,7 +373,7 @@ app.patch('/api/transactions/:id', requireAuth, requireBudgetReady, async (req, 
       fields.payee = await resolvePayeeIdByName(payeeName);
     }
     await api.updateTransaction(id, fields);
-    await api.sync();
+    await timedSync('edit');
     res.json({ ok: true });
   } catch (err) {
     console.error('[actualcel] Errore modifica transazione:', err);
@@ -359,7 +385,7 @@ app.delete('/api/transactions/:id', requireAuth, requireBudgetReady, async (req,
   const { id } = req.params;
   try {
     await api.deleteTransaction(id);
-    await api.sync();
+    await timedSync('delete');
     res.json({ ok: true });
   } catch (err) {
     console.error('[actualcel] Errore cancellazione transazione:', err);
@@ -380,7 +406,7 @@ connectOnce().catch(handleFatalError);
 // Ri-sincronizza periodicamente per tenere aggiornate categorie/beneficiari
 // creati da altri client (desktop/altro telefono).
 setInterval(() => {
-  if (budgetReady) api.sync().catch((e) => console.warn('[actualcel] sync periodico fallito:', e.message));
+  if (budgetReady) timedSync('periodico').catch((e) => console.warn('[actualcel] sync periodico fallito:', e.message));
 }, Math.max(1, Number(SYNC_INTERVAL_MINUTES)) * 60 * 1000);
 
 process.on('SIGTERM', async () => {
