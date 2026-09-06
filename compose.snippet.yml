@@ -1,18 +1,28 @@
-# Aggiungi questo servizio allo stack Portainer/compose dove gira già
-# actual_server, così condividono la stessa rete Docker e puoi usare
-# ACTUAL_SERVER_URL=http://actual_server:5006 senza passare da IP/porta host.
+# Aggiungi questo servizio allo stack Portainer dove gira già actual_server,
+# così condividono la stessa rete Docker. Nessun clone/build manuale sul NAS:
+# "build" punta direttamente al repository Git pubblico, Docker lo scarica e
+# lo builda da solo quando fai "Update the stack" in Portainer.
+#
+# Le variabili ${...} qui sotto NON vanno scritte a mano in questo file:
+# in Portainer, sotto l'editor dello stack, c'è la sezione
+# "Environment variables" — aggiungile lì (una riga per NOME=valore), così i
+# valori restano fuori dal repository Git (che è pubblico) e vivono solo
+# dentro Portainer.
 
   actualcel:
     container_name: actualcel
-    image: actualcel:latest   # build locale, vedi README
-    build: /volume1/docker/actualcel   # percorso assoluto: nello stack Portainer
-                                        # "." punterebbe alla cartella interna
-                                        # di Portainer, non a questa
+    image: actualcel:latest
+    build: https://github.com/william-webext/actualcel.git
     restart: unless-stopped
-    env_file:
-      - /volume1/docker/actualcel/.env
+    environment:
+      ACTUAL_SERVER_URL: http://actual_server:5006
+      ACTUAL_PASSWORD: ${ACTUAL_PASSWORD}
+      ACTUAL_SYNC_ID: ${ACTUAL_SYNC_ID}
+      ACTUAL_ENCRYPTION_PASSWORD: ${ACTUAL_ENCRYPTION_PASSWORD:-}
+      APP_PIN: ${APP_PIN}
+      SESSION_SECRET: ${SESSION_SECRET}
     volumes:
-      - /volume1/docker/actualcel:/data:rw
+      - /volume1/docker/actualcel:/data:rw   # Docker crea la cartella da solo al primo avvio
     ports:
       - "8730:8730"   # esponi solo se ti serve raggiungerlo anche senza tunnel;
                        # altrimenti puoi anche omettere e usare solo la rete Docker + Cloudflare Tunnel

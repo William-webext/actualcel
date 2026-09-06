@@ -12,7 +12,7 @@ Fa solo questo, di proposito: form con conto, beneficiario (autocomplete su quel
 
 ## 2. Pubblicare il repository su GitHub (account william-webext)
 
-1. Su github.com, loggato come `william-webext`: **New repository** → nome `actualcel` → visibilità **Private** (consigliata: nessun segreto reale finisce nel repo grazie al `.gitignore`, ma è comunque configurazione della tua infrastruttura personale) → **non** spuntare "Add a README" (ce l'hai già in questa cartella).
+1. Su github.com, loggato come `william-webext`: **New repository** → nome `actualcel` → **Public** → **non** spuntare "Add a README" (ce l'hai già in questa cartella).
 2. In locale, dentro questa cartella:
 
 ```bash
@@ -24,38 +24,26 @@ git remote add origin https://github.com/william-webext/actualcel.git
 git push -u origin main
 ```
 
-Se non hai ancora un token/SSH configurato per `william-webext` su questa macchina, GitHub te lo chiede al primo `push` (token di accesso personale al posto della password, oppure chiave SSH se usi l'URL `git@github.com:william-webext/actualcel.git`).
+Se non hai ancora un token/SSH configurato per `william-webext` su questa macchina, GitHub te lo chiede al primo `push` (token di accesso personale al posto della password, oppure chiave SSH se usi l'URL `git@github.com:william-webext/actualcel.git`). Nota: repo pubblico significa che chiunque vede il codice, ma nessun segreto ci finisce dentro — password, sync ID, PIN restano solo dentro Portainer (punto 3), mai nel repository.
 
-## 3. Portare i file sul NAS e configurare `.env`
+## 3. Aggiungere il servizio allo stack Portainer esistente — nessun clone o build manuale sul NAS
 
-Sul NAS, via SSH (o il terminale di Portainer), clona il repo direttamente nella cartella dove Docker se lo aspetta:
+`compose.snippet.yml` usa `build: https://github.com/william-webext/actualcel.git`: è Docker stesso a scaricare e buildare il repo quando fai il deploy, non devi mettere file sul NAS né aprire una shell.
 
-```bash
-cd /volume1/docker
-git clone https://github.com/william-webext/actualcel.git
-cd actualcel
-cp .env.example .env
-```
+1. Portainer → **Stacks** → apri lo stack di Actual (quello di Marius, con `actual_server`) → **Editor**.
+2. Incolla il contenuto di `compose.snippet.yml` sotto il servizio `actual_server` esistente, stessa indentazione (allo stesso livello degli altri servizi sotto `services:`).
+3. Scorri sotto l'editor fino alla sezione **Environment variables** dello stack (non dentro il file YAML) e aggiungi, una riga per variabile:
+   - `ACTUAL_PASSWORD` → la password del tuo server Actual
+   - `ACTUAL_SYNC_ID` → da Actual: Settings → Show advanced settings → Sync ID
+   - `ACTUAL_ENCRYPTION_PASSWORD` → solo se hai la crittografia end-to-end attiva, altrimenti lasciala vuota/ometti
+   - `APP_PIN` → il PIN che userai da mobile
+   - `SESSION_SECRET` → una stringa lunga a caso, es. generata con `openssl rand -hex 32` (da un terminale qualsiasi, anche sul tuo PC)
+4. **Update the stack**. Al primo deploy la build da Git richiede qualche decina di secondi in più del solito — normale.
+5. Verifica nei log del container `actualcel` (Portainer → Containers → actualcel → Logs) che appaia "Budget caricato correttamente."
 
-Essendo il repo privato, anche il `clone` ti chiede le credenziali GitHub (stesso token/SSH del punto 2).
+Per aggiornare dopo un futuro `git push` su GitHub: torna sullo stack e rifai **Update the stack**. Se Portainer non rileva da solo che deve ricostruire l'immagine (capita, essendo build locale e non un'immagine da registry), elimina prima l'immagine `actualcel:latest` da Portainer → Images, poi rifai Update: così è costretto a ributtare giù il repo e ricostruirla.
 
-Poi compila `.env` (`vi .env` o File Station):
-
-- `ACTUAL_SERVER_URL`: dato che sta nello stesso stack/rete Docker di `actual_server`, usa `http://actual_server:5006` (nome-servizio:porta-interna, non quella host `8304`).
-- `ACTUAL_PASSWORD`, `ACTUAL_SYNC_ID`, `ACTUAL_ENCRYPTION_PASSWORD`: dal punto 1.
-- `APP_PIN`: il codice che userai per sbloccare l'app da mobile.
-- `SESSION_SECRET`: genera con `openssl rand -hex 32`.
-
-## 4. Aggiungere il servizio allo stack Portainer esistente
-
-Nello stack Portainer dove già gira `actual_server` (quello creato seguendo la guida di Marius):
-
-1. Portainer → **Stacks** → apri lo stack di Actual → **Editor**.
-2. Incolla il contenuto di `compose.snippet.yml` sotto il servizio `actual_server` esistente (stessa indentazione, è già pensato per stare allo stesso livello degli altri `services:`). Nota che `build:` ed `env_file:` puntano al percorso assoluto `/volume1/docker/actualcel` — necessario perché in uno stack Portainer `.` punterebbe alla cartella interna di Portainer, non a questa.
-3. **Update the stack** (spunta "Re-pull image and redeploy" non serve dato che è build locale, ma va bene lasciarlo).
-4. Verifica nei log del container `actualcel` che appaia "Budget caricato correttamente."
-
-## 5. Esporlo con Cloudflare Tunnel
+## 4. Esporlo con Cloudflare Tunnel
 
 Stessa procedura che hai già fatto per Actual: Cloudflare Zero Trust → Networks → Tunnels → il tuo tunnel → Public Hostname → Add:
 
@@ -63,7 +51,7 @@ Stessa procedura che hai già fatto per Actual: Cloudflare Zero Trust → Networ
 - Service type: HTTP
 - URL: `actualcel:8730` se `cloudflared` condivide la rete Docker col container, altrimenti `<IP-LAN-NAS>:8730`
 
-## 6. Uso
+## 5. Uso
 
 Apri l'URL da mobile, inserisci il PIN, salva sulla home screen per un accesso tipo app (il tag `apple-mobile-web-app-capable` è già nell'pagina). Il form dopo un salvataggio si svuota solo su importo/beneficiario/note e resta pronto per il prossimo inserimento — conto, categoria e data restano impostati per velocizzare inserimenti multipli.
 
@@ -71,7 +59,7 @@ Apri l'URL da mobile, inserisci il PIN, salva sulla home screen per un accesso t
 
 Questo servizio scrive sui tuoi dati finanziari reali, protetto solo da un PIN con rate-limit (10 tentativi/15 min). È ragionevole per iniziare, ma se vuoi un livello in più valuta di mettere anche **Cloudflare Access** davanti all'hostname (login extra prima ancora di arrivare al PIN dell'app) — con Cloudflare Tunnel che già usi è un'aggiunta di pochi minuti.
 
-I cookie di sessione sono `Secure` di default (richiedono HTTPS, cioè il tunnel Cloudflare) — se mai lo esponi solo in LAN su HTTP semplice, imposta `COOKIE_SECURE=false` nel `.env`, altrimenti il login non "tiene".
+I cookie di sessione sono `Secure` di default (richiedono HTTPS, cioè il tunnel Cloudflare) — se mai lo esponi solo in LAN su HTTP semplice, aggiungi `COOKIE_SECURE=false` tra le Environment variables dello stack Portainer, altrimenti il login non "tiene".
 
 ## Comportamento all'avvio
 
