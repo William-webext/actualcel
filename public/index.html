@@ -158,6 +158,7 @@
   .editActions { display: flex; gap: 10px; }
   .editActions button { flex: 1; padding: 16px; border-radius: var(--radius); border: none; font-size: 1.05rem; font-weight: 700; }
   .dangerBtn { background: var(--surface-2); color: var(--expense); border: 1px solid var(--expense) !important; }
+  .dangerBtn.confirming { background: var(--expense); color: white; }
   .primaryBtn { background: var(--accent); color: white; }
 
   #toast {
@@ -311,6 +312,7 @@
     categoryMap: {},
     payeeMap: {},
     editingId: null,
+    deleteConfirmTimeout: null,
   };
 
   var loginScreen = document.getElementById('loginScreen');
@@ -512,6 +514,7 @@
         appScreen.classList.remove('hidden');
         dateInput.value = todayLocalISO();
         loadMeta();
+        history.replaceState({ view: 'new' }, '');
       } else {
         loginScreen.classList.remove('hidden');
         appScreen.classList.add('hidden');
@@ -610,10 +613,16 @@
     });
   });
 
-  // --- Tab Nuovo / Storico -------------------------------------------------
+  // --- Tab Nuovo / Storico, integrate col tasto Indietro di Android -------
+  //
+  // Usiamo la History API: aprire lo Storico o la scheda di modifica pusha
+  // uno stato; il tasto Indietro (che scatena "popstate") chiude la scheda
+  // o torna al tab Nuovo invece di uscire dall'app o tornare alla home di
+  // Android. Solo dal tab Nuovo, senza nulla aperto, Indietro fa il suo
+  // comportamento normale (minimizza/chiude l'app).
 
-  function switchTab(tab) {
-    var isNew = tab === 'new';
+  function applyTab(tab) {
+    var isNew = tab !== 'history';
     tabNew.classList.toggle('active', isNew);
     tabHistory.classList.toggle('active', !isNew);
     newScreen.classList.toggle('hidden', !isNew);
@@ -622,8 +631,31 @@
     if (!isNew) loadHistory();
   }
 
-  tabNew.addEventListener('click', function () { switchTab('new'); });
-  tabHistory.addEventListener('click', function () { switchTab('history'); });
+  function goToTab(tab) {
+    if (history.state && history.state.modal) {
+      // scheda di modifica aperta: un tap sui tab la chiude e basta,
+      // evita di mescolare due cambi di stato nella stessa azione.
+      closeEdit();
+      return;
+    }
+    var current = (history.state && history.state.view) || 'new';
+    if (tab === current) { applyTab(tab); return; }
+    if (tab === 'history') {
+      history.pushState({ view: 'history' }, '');
+      applyTab('history');
+    } else {
+      history.back(); // il popstate riporterà su "new"
+    }
+  }
+
+  tabNew.addEventListener('click', function () { goToTab('new'); });
+  tabHistory.addEventListener('click', function () { goToTab('history'); });
+
+  window.addEventListener('popstate', function (e) {
+    var s = e.state || { view: 'new' };
+    if (!s.modal) actualCloseEdit();
+    applyTab(s.view === 'history' ? 'history' : 'new');
+  });
 
   // --- Storico ---------------------------------------------------------
 
@@ -721,7 +753,14 @@
 
   // --- Modale di modifica -------------------------------------------------
 
+  function resetDeleteConfirm() {
+    clearTimeout(state.deleteConfirmTimeout);
+    editDeleteBtn.classList.remove('confirming');
+    editDeleteBtn.textContent = 'Elimina';
+  }
+
   function openEdit(t) {
+    resetDeleteConfirm();
     state.editingId = t.id;
     var type = t.amount < 0 ? 'expense' : 'income';
     setEditType(type);
@@ -732,11 +771,25 @@
     editDate.value = t.date;
     editNotes.value = t.notes || '';
     editOverlay.classList.remove('hidden');
+    history.pushState({ view: (history.state && history.state.view) || 'new', modal: true }, '');
+  }
+
+  function actualCloseEdit() {
+    editOverlay.classList.add('hidden');
+    state.editingId = null;
+    resetDeleteConfirm();
   }
 
   function closeEdit() {
-    editOverlay.classList.add('hidden');
-    state.editingId = null;
+    // Se la scheda è stata aperta con un push di history (caso normale),
+    // usa il tasto Indietro "virtuale" così lo stato resta coerente col
+    // tasto Indietro fisico di Android — evita che serva un secondo tap
+    // per uscire davvero dopo aver chiuso la scheda con la X.
+    if (history.state && history.state.modal) {
+      history.back();
+    } else {
+      actualCloseEdit();
+    }
   }
 
   editClose.addEventListener('click', closeEdit);
@@ -785,9 +838,18 @@
 
   editDeleteBtn.addEventListener('click', function () {
     if (!state.editingId) return;
-    if (!confirm('Eliminare questa transazione?')) return;
+
+    if (!editDeleteBtn.classList.contains('confirming')) {
+      editDeleteBtn.classList.add('confirming');
+      editDeleteBtn.textContent = 'Tocca di nuovo per confermare';
+      state.deleteConfirmTimeout = setTimeout(resetDeleteConfirm, 4000);
+      return;
+    }
+
+    clearTimeout(state.deleteConfirmTimeout);
+    var idToDelete = state.editingId;
     editDeleteBtn.disabled = true;
-    fetch('/api/transactions/' + encodeURIComponent(state.editingId), { method: 'DELETE' })
+    fetch('/api/transactions/' + encodeURIComponent(idToDelete), { method: 'DELETE' })
       .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
       .then(function (res) {
         if (!res.ok) throw new Error(res.data && res.data.error);
@@ -797,6 +859,7 @@
       })
       .catch(function () {
         showToast('Cancellazione fallita, riprova', true);
+        resetDeleteConfirm();
       })
       .finally(function () {
         editDeleteBtn.disabled = false;
