@@ -386,7 +386,17 @@ app.post('/api/transaction', requireAuth, requireBudgetReady, async (req, res) =
   if (categoryId) tx.category = categoryId;
 
   try {
-    const ids = await api.addTransactions(accountId, [tx], undefined, true);
+    // NOTA: la firma vera è addTransactions(accountId, transactions, opts) —
+    // gli argomenti "undefined, true" che c'erano prima non corrispondevano a
+    // nessun parametro reale della funzione e venivano ignorati (non
+    // abilitavano né learnCategories né runTransfers): rimossi, il
+    // comportamento resta lo stesso di prima. Il cronometro serve a capire se
+    // il lavoro pesante sta qui dentro invece che nella sync (che per
+    // modifica/cancellazione era la causa, ma per l'inserimento potrebbe non
+    // esserlo — verifichiamolo con i numeri veri).
+    const t0 = Date.now();
+    const ids = await api.addTransactions(accountId, [tx]);
+    console.log(`[actualcel] addTransactions completata in ${Date.now() - t0}ms`);
     res.json({ ok: true, id: ids && ids[0] });
     syncInBackground('add');
   } catch (err) {
