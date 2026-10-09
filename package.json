@@ -8,7 +8,7 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "@actual-app/api": "^26.9.0",
+    "@actual-app/api": "^26.10.0",
     "better-sqlite3": "^12.11.1",
     "cookie-session": "^2.1.1",
     "express": "^4.19.2",
